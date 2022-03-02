@@ -208,7 +208,7 @@ static ReadBuffer * getStream(
 
     String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
     // TODO LOG
-    LOG_TRACE(log, "getStream::getFileNameForStream", stream_name);
+    // LOG_TRACE(log, "getStream::getFileNameForStream", stream_name);
 
     auto it = streams.find(stream_name);
     if (it == streams.end())
