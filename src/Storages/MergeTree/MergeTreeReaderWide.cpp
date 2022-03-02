@@ -112,8 +112,8 @@ size_t MergeTreeReaderWide::readRows(
             {
                 size_t column_size_before_reading = column->size();
                 auto & cache = caches[column_from_part.getNameInStorage()];
-
-                LOG_TRACE(log, "readData");
+                // TODO LOG
+                LOG_TRACE(log, "MergeTreeReaderWide::readRows::readData");
                 readData(
                     column_from_part, column, from_mark, continue_reading, current_task_last_mark,
                     max_rows_to_read, cache, /* was_prefetched =*/ !prefetched_streams.empty());
@@ -165,6 +165,8 @@ void MergeTreeReaderWide::addStreams(const NameAndTypePair & name_and_type,
     ISerialization::StreamCallback callback = [&] (const ISerialization::SubstreamPath & substream_path)
     {
         String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
+        // TODO LOG
+        LOG_TRACE(log, "addStream::getFileNameForStream", stream_name);
 
         if (streams.count(stream_name))
             return;
@@ -205,6 +207,8 @@ static ReadBuffer * getStream(
         return nullptr;
 
     String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
+    // TODO LOG
+    LOG_TRACE(log, "getStream::getFileNameForStream", stream_name);
 
     auto it = streams.find(stream_name);
     if (it == streams.end())
