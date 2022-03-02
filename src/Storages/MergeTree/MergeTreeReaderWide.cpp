@@ -113,6 +113,7 @@ size_t MergeTreeReaderWide::readRows(
                 size_t column_size_before_reading = column->size();
                 auto & cache = caches[column_from_part.getNameInStorage()];
 
+                LOG_TRACE(log, "readData");
                 readData(
                     column_from_part, column, from_mark, continue_reading, current_task_last_mark,
                     max_rows_to_read, cache, /* was_prefetched =*/ !prefetched_streams.empty());
