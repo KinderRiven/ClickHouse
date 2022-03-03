@@ -18,7 +18,6 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-
 static void filterColumns(Columns & columns, const IColumn::Filter & filter)
 {
     for (auto & column : columns)
@@ -54,7 +53,6 @@ static void filterColumns(Columns & columns, const ColumnPtr & filter)
     FilterDescription descr(*filter);
     filterColumns(columns, *descr.data);
 }
-
 
 static size_t getLastMark(const MergeTreeRangeReader::ReadResult::RangesInfo & ranges)
 {
@@ -575,9 +573,12 @@ MergeTreeRangeReader::MergeTreeRangeReader(
 #ifdef DEBUG_IN_RANGE_READER
     const auto &name_and_type_to_print = merge_tree_reader->getColumns();
     Names names = name_and_type_to_print.getNames();
-    for (auto it = names.begin(); it !=names.end(); it++) {
+    int i = 0;
+    size_t name_count = names.size();
+    for (auto it = names.begin(); it != names.end(); it++) {
+        i++;
         std::string name = *it;
-        LOG_TRACE(log, "MergeTreeRangeReader::MergeTreeRangeReader ColumnName {}", name);
+        LOG_TRACE(log, "MergeTreeRangeReader::MergeTreeRangeReader ColumnName {}, {}/{}.", name, i, name_count);
     }
 #endif
 
@@ -822,7 +823,12 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
     }
 
     if (read_result.num_rows == 0)
+    {
+#ifdef DEBUG_IN_RANGE_READER
+        LOG_TRACE(log, "[END] MergeTreeRangeReader::read with zero.");
+#endif
         return read_result;
+    }
 
 #ifdef DEBUG_IN_RANGE_READER
     LOG_TRACE(log, "[DO][TODO] MergeTreeRangeReader::read->executePrewhereActionsAndFilterColumns.");
@@ -904,7 +910,6 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
 #ifdef DEBUG_IN_RANGE_READER
     LOG_TRACE(log, "[END] MergeTreeRangeReader::startReadingChain.");
 #endif
-
     return result;
 }
 
