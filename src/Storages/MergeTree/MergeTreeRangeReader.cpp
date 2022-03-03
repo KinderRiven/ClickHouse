@@ -793,8 +793,8 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
             read_result.columns.clear();
 #ifdef DEBUG_IN_RANGE_READER
         LOG_TRACE(log, "[DONE][TODO] MergeTreeRangeReader::read->fillMissingColumns, "
-                       "result.numReadRows = {}, num_read_rows = {}.",
-                  read_result.numReadRows(), num_read_rows);
+                       "result.numReadRows = {}.",
+                  read_result.numReadRows());
 #endif
 
         size_t total_bytes = 0;
