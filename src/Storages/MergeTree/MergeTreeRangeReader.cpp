@@ -5,6 +5,8 @@
 #include <Interpreters/castColumn.h>
 #include <DataTypes/DataTypeNothing.h>
 
+#define DEBUG_IN_RANGE_READER
+
 #ifdef __SSE2__
 #include <emmintrin.h>
 #endif
@@ -228,7 +230,10 @@ size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bo
         checkNotFinished();
 
         size_t read_rows = readRows(columns, num_rows);
+
+#ifdef DEBUG_IN_RANGE_READER
         LOG_TRACE(log, "MergeTreeRangeReader::Stream::read read_rows({}), num_rows({})", read_rows, num_rows);
+#endif
 
         offset_after_current_mark += num_rows;
 
@@ -275,10 +280,11 @@ size_t MergeTreeRangeReader::Stream::finalize(Columns & columns)
 
     if (stream.isFinished())
         finish();
-
+#ifdef DEBUG_IN_RANGE_READER
+    LOG_TRACE(log, "MergeTreeRangeReader::Stream::finalize read_rows({})", read_rows);
+#endif
     return read_rows;
 }
-
 
 void MergeTreeRangeReader::ReadResult::addGranule(size_t num_rows_)
 {
@@ -641,7 +647,9 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
 
     if (prev_reader)
     {
-        LOG_TRACE(log, "[StorageTrace] MergeTreeRangeReader::read to prev reader.");
+#ifdef DEBUG_IN_RANGE_READER
+        LOG_TRACE(log, "MergeTreeRangeReader::read to prev reader.");
+#endif
         read_result = prev_reader->read(max_rows, ranges);
 
         size_t num_read_rows;
@@ -759,7 +767,6 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
     return read_result;
 }
 
-
 MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t max_rows, MarkRanges & ranges)
 {
     ReadResult result;
@@ -777,6 +784,11 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
             if (stream.isFinished())
             {
                 result.addRows(stream.finalize(result.columns));
+#ifindef DEBUG_IN_RANGE_READER
+                /// stream creator
+                MarkRange _mk_range = ranges.front();
+                LOG_TRACE(log, "Create stream in MergeTreeRangeReader::read, mark_range [{}, {}]", _mk_range.first, _mk_range.second);
+#endif
                 stream = Stream(ranges.front().begin, ranges.front().end, current_task_last_mark, merge_tree_reader);
                 result.addRange(ranges.front());
                 ranges.pop_front();
