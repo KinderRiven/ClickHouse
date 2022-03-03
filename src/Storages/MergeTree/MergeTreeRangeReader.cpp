@@ -228,8 +228,7 @@ size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bo
         checkNotFinished();
 
         size_t read_rows = readRows(columns, num_rows);
-        std::string log_print = "MergeTreeRangeReader::Stream::read [read_rows:" + read_rows + "][num_rows:" + num_rows + "]";
-        LOG_TRACE(log, log_print);
+        LOG_TRACE(log, "MergeTreeRangeReader::Stream::read read_rows({}), num_rows({})", read_rows, num_rows);
 
         offset_after_current_mark += num_rows;
 
