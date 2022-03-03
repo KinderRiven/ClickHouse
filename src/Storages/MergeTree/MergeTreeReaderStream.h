@@ -59,5 +59,8 @@ private:
     std::unique_ptr<CompressedReadBufferFromFile> non_cached_buffer;
 
     MergeTreeMarksLoader marks_loader;
+
+    Poco::Logger * log = &Poco::Logger::get("[StorageTrace] MergeTreeReaderStream");
+
 };
 }

@@ -14,6 +14,8 @@ namespace ErrorCodes
     extern const int CANNOT_READ_ALL_DATA;
 }
 
+#define DEBUG_IN_MERGE_TREE_STREAM
+
 MergeTreeReaderStream::MergeTreeReaderStream(
         DiskPtr disk_,
         const String & path_prefix_, const String & data_file_extension_, size_t marks_count_,
@@ -147,8 +149,10 @@ std::pair<size_t, size_t> MergeTreeReaderStream::getRightOffsetAndBytesRange(siz
 
 void MergeTreeReaderStream::seekToMark(size_t index)
 {
+#ifdef DEBUG_IN_MERGE_TREE_STREAM
+    LOG_TRACE(log, "[BEGIN] MergeTreeReaderStream::seekToMark to index {}.", index);
+#endif
     MarkInCompressedFile mark = marks_loader.getMark(index);
-
     try
     {
         if (cached_buffer)
@@ -167,11 +171,17 @@ void MergeTreeReaderStream::seekToMark(size_t index)
 
         throw;
     }
+#ifdef DEBUG_IN_MERGE_TREE_STREAM
+    LOG_TRACE(log, "[END] MergeTreeReaderStream::seekToMark to index {}.", index);
+#endif
 }
 
 
 void MergeTreeReaderStream::seekToStart()
 {
+#ifdef DEBUG_IN_MERGE_TREE_STREAM
+    LOG_TRACE(log, "[BEGIN] MergeTreeReaderStream::seekToStart.");
+#endif
     try
     {
         if (cached_buffer)
@@ -187,11 +197,17 @@ void MergeTreeReaderStream::seekToStart()
 
         throw;
     }
+#ifdef DEBUG_IN_MERGE_TREE_STREAM
+    LOG_TRACE(log, "[END] MergeTreeReaderStream::seekToStart.");
+#endif
 }
 
 
 void MergeTreeReaderStream::adjustForRange(MarkRange range)
 {
+#ifdef DEBUG_IN_MERGE_TREE_STREAM
+    LOG_TRACE(log, "[BEGIN] MergeTreeReaderStream::adjustForRange, mark_range [{}, {}].", range.begin, range.end);
+#endif
     /**
      * Note: this method is called multiple times for the same range of marks -- each time we
      * read from stream, but we must update last_right_offset only if it is bigger than
@@ -220,6 +236,9 @@ void MergeTreeReaderStream::adjustForRange(MarkRange range)
         if (non_cached_buffer)
             non_cached_buffer->setReadUntilPosition(right_offset);
     }
+#ifdef DEBUG_IN_MERGE_TREE_STREAM
+    LOG_TRACE(log, "[END] MergeTreeReaderStream::adjustForRange, mark_range [{}, {}].", range.begin, range.end);
+#endif
 }
 
 }
