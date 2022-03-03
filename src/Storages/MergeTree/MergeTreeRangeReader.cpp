@@ -556,7 +556,7 @@ MergeTreeRangeReader::MergeTreeRangeReader(
         sample_block.insert({name_and_type.type->createColumn(), name_and_type.type, name_and_type.name});
 
 #ifdef DEBUG_IN_RANGE_READER
-    name_and_type_to_print = merge_tree_reader->getColumns();
+    const auto &name_and_type_to_print = merge_tree_reader->getColumns();
     Names names = name_and_type_to_print.getNames();
     for (auto it = names.begin(); it !=names.end()l it++) {
         std::string name = *it;
