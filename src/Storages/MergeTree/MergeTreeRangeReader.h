@@ -140,6 +140,8 @@ public:
         size_t readRows(Columns & columns, size_t num_rows);
         void toNextMark();
         size_t ceilRowsToCompleteGranules(size_t rows_num) const;
+
+        Poco::Logger * log = &Poco::Logger::get("[StorageTrace] MergeTreeRangeReader::Stream");
     };
 
     /// Statistics after next reading step.
@@ -249,7 +251,7 @@ private:
     bool last_reader_in_chain = false;
     bool is_initialized = false;
 
-    Poco::Logger * log = &Poco::Logger::get("MergeTreeRangeReader");
+    Poco::Logger * log = &Poco::Logger::get("[StorageTrace] MergeTreeRangeReader");
 };
 
 }
