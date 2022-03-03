@@ -233,7 +233,7 @@ void MergeTreeRangeReader::Stream::toNextMark()
 size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bool skip_remaining_rows_in_current_granule)
 {
 #ifdef DEBUG_IN_RANGE_READER
-    LOG_TRACE(log, "[BEGIN] MergeTreeRangeReader::Stream::read, read_rows({}), num_rows({})", read_rows, num_rows);
+    LOG_TRACE(log, "[BEGIN] MergeTreeRangeReader::Stream::read.");
 #endif
 
     checkEnoughSpaceInCurrentGranule(num_rows);
