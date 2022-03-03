@@ -229,6 +229,10 @@ size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bo
 
         size_t read_rows = readRows(columns, num_rows);
 
+        std::string _log_print_read_rows = std::to_string(read_rows);
+        std::string _log_print_num_rows = std::to_string(num_rows);
+        LOG_TRACE(log, "MergeTreeRangeReader::Stream::read [read_rows:", _log_print_read_rows, "][num_rows:", _log_print_num_rows, "]");
+
         offset_after_current_mark += num_rows;
 
         /// Start new granule; skipped_rows_after_offset is already zero.
@@ -516,7 +520,6 @@ void MergeTreeRangeReader::ReadResult::setFilter(const ColumnPtr & new_filter)
             throw Exception("setFilter function expected ColumnUInt8.", ErrorCodes::LOGICAL_ERROR);
     }
 }
-
 
 size_t MergeTreeRangeReader::ReadResult::countBytesInResultFilter(const IColumn::Filter & filter_)
 {

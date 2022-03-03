@@ -248,6 +248,8 @@ private:
 
     bool last_reader_in_chain = false;
     bool is_initialized = false;
+
+    Poco::Logger * log = &Poco::Logger::get("MergeTreeRangeReader");
 };
 
 }
