@@ -75,6 +75,8 @@ public:
 
         bool isFinished() const { return is_finished; }
 
+        Poco::Logger * log = &Poco::Logger::get("[StorageTrace] MergeTreeRangeReader::DelayedStream");
+
     private:
         size_t current_mark = 0;
         /// Offset from current mark in rows
@@ -93,6 +95,7 @@ public:
         /// Current position from the begging of file in rows
         size_t position() const;
         size_t readRows(Columns & columns, size_t num_rows);
+
     };
 
     /// Very thin wrapper for DelayedStream
