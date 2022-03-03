@@ -64,7 +64,6 @@ static size_t getLastMark(const MergeTreeRangeReader::ReadResult::RangesInfo & r
     return current_task_last_mark;
 }
 
-
 MergeTreeRangeReader::DelayedStream::DelayedStream(
     size_t from_mark,
     size_t current_task_last_mark_,
@@ -87,9 +86,19 @@ size_t MergeTreeRangeReader::DelayedStream::readRows(Columns & columns, size_t n
 {
     if (num_rows)
     {
+#ifdef DEBUG_IN_RANGE_READER
+        LOG_TRACE(log, "[BEGIN] MergeTreeRangeReader::DelayedStream::readRows.");
+#endif
+#ifdef DEBUG_IN_RANGE_READER
+        LOG_TRACE(log, "[DO] IMergeTreeReader::readRows.");
+#endif
         size_t rows_read = merge_tree_reader->readRows(
             current_mark, current_task_last_mark, continue_reading, num_rows, columns);
-
+#ifdef DEBUG_IN_RANGE_READER
+        LOG_TRACE(log, "[DONE] IMergeTreeReader::readRows, "
+                       "rows_read = {}, num_rows = {}, num_columns = {}.",
+                  rows_read, num_rows, columns.size());
+#endif
         continue_reading = true;
 
         /// Zero rows_read maybe either because reading has finished
@@ -98,10 +107,11 @@ size_t MergeTreeRangeReader::DelayedStream::readRows(Columns & columns, size_t n
         ///  because we can finish reading by calculation the number of pending rows.
         if (0 < rows_read && rows_read < num_rows)
             is_finished = true;
-
+#ifdef DEBUG_IN_RANGE_READER
+        LOG_TRACE(log, "[END] MergeTreeRangeReader::DelayedStream::readRows.");
+#endif
         return rows_read;
     }
-
     return 0;
 }
 
@@ -201,8 +211,9 @@ size_t MergeTreeRangeReader::Stream::readRows(Columns & columns, size_t num_rows
     size_t rows_read = stream.read(columns, current_mark, offset_after_current_mark, num_rows);
 
     if (stream.isFinished())
+    {
         finish();
-
+    }
     return rows_read;
 }
 
@@ -223,24 +234,31 @@ void MergeTreeRangeReader::Stream::toNextMark()
 
 size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bool skip_remaining_rows_in_current_granule)
 {
+#ifdef DEBUG_IN_RANGE_READER
+    LOG_TRACE(log, "[BEGIN] MergeTreeRangeReader::Stream::read, read_rows({}), num_rows({})", read_rows, num_rows);
+#endif
+
     checkEnoughSpaceInCurrentGranule(num_rows);
 
     if (num_rows)
     {
         checkNotFinished();
-
-        size_t read_rows = readRows(columns, num_rows);
-
 #ifdef DEBUG_IN_RANGE_READER
-        LOG_TRACE(log, "MergeTreeRangeReader::Stream::read read_rows({}), num_rows({})", read_rows, num_rows);
+        LOG_TRACE(log, "[DO] MergeTreeRangeReader::Stream::readRows, num_rows = {}.", num_rows);
 #endif
-
+        size_t read_rows = readRows(columns, num_rows);
+#ifdef DEBUG_IN_RANGE_READER
+        LOG_TRACE(log, "[DONE] MergeTreeRangeReader::Stream::readRows, num_rows = {}, read_rows.", num_rows, read_rows);
+#endif
         offset_after_current_mark += num_rows;
 
         /// Start new granule; skipped_rows_after_offset is already zero.
         if (offset_after_current_mark == current_mark_index_granularity || skip_remaining_rows_in_current_granule)
             toNextMark();
 
+#ifdef DEBUG_IN_RANGE_READER
+        LOG_TRACE(log, "[END] MergeTreeRangeReader::Stream::read.");
+#endif
         return read_rows;
     }
     else
@@ -252,7 +270,9 @@ size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bo
             checkNotFinished();
             toNextMark();
         }
-
+#ifdef DEBUG_IN_RANGE_READER
+        LOG_TRACE(log, "[END] MergeTreeRangeReader::Stream::read with NextMark.");
+#endif
         return 0;
     }
 }
@@ -280,9 +300,6 @@ size_t MergeTreeRangeReader::Stream::finalize(Columns & columns)
 
     if (stream.isFinished())
         finish();
-#ifdef DEBUG_IN_RANGE_READER
-    LOG_TRACE(log, "MergeTreeRangeReader::Stream::finalize read_rows({})", read_rows);
-#endif
     return read_rows;
 }
 
