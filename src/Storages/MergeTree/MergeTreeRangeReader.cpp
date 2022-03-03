@@ -641,6 +641,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
 
     if (prev_reader)
     {
+        LOG_TRACE(log, "[StorageTrace] MergeTreeRangeReader::read to prev reader.");
         read_result = prev_reader->read(max_rows, ranges);
 
         size_t num_read_rows;
@@ -728,6 +729,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
 
         if (read_result.num_rows)
         {
+            LOG_TRACE(log, "[StorageTrace] MergeTreeRangeReader::read read_result.num_rows ({}).", read_result.num_rows);
             bool should_evaluate_missing_defaults;
             merge_tree_reader->fillMissingColumns(read_result.columns, should_evaluate_missing_defaults,
                                                   read_result.num_rows);
