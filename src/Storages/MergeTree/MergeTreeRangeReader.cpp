@@ -784,7 +784,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
             if (stream.isFinished())
             {
                 result.addRows(stream.finalize(result.columns));
-#ifndef DEBUG_IN_RANGE_READER
+#ifdef DEBUG_IN_RANGE_READER
                 /// stream creator
                 LOG_TRACE(log, "Create stream in MergeTreeRangeReader::read, mark_range [{}, {}]", ranges.front().begin, ranges.front().end);
 #endif
