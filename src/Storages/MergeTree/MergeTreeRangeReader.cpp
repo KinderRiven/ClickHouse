@@ -555,6 +555,15 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     for (const auto & name_and_type : merge_tree_reader->getColumns())
         sample_block.insert({name_and_type.type->createColumn(), name_and_type.type, name_and_type.name});
 
+#ifdef DEBUG_IN_RANGE_READER
+    name_and_type_to_print = merge_tree_reader->getColumns();
+    Names names = name_and_type_to_print.getNames();
+    for (auto it = names.begin(); it !=names.end()l it++) {
+        std::string name = *it;
+        LOG_TRACE(log, "MergeTreeRangeReader::MergeTreeRangeReader ColumnName {}", name);
+    }
+#endif
+
     if (prewhere_info)
     {
         if (prewhere_info->alias_actions)
@@ -597,7 +606,6 @@ size_t MergeTreeRangeReader::numPendingRowsInCurrentGranule() const
     return numRowsInCurrentGranule();
 }
 
-
 size_t MergeTreeRangeReader::numRowsInCurrentGranule() const
 {
     /// If pending_rows is zero, than stream is not initialized.
@@ -620,7 +628,6 @@ size_t MergeTreeRangeReader::Stream::numPendingRows() const
     return rows_between_marks - offset_after_current_mark;
 }
 
-
 size_t MergeTreeRangeReader::Stream::ceilRowsToCompleteGranules(size_t rows_num) const
 {
     /// FIXME suboptimal
@@ -631,7 +638,6 @@ size_t MergeTreeRangeReader::Stream::ceilRowsToCompleteGranules(size_t rows_num)
 
     return result;
 }
-
 
 bool MergeTreeRangeReader::isCurrentRangeFinished() const
 {

@@ -251,7 +251,9 @@ private:
     bool last_reader_in_chain = false;
     bool is_initialized = false;
 
+    /// Something to DEBUG
     Poco::Logger * log = &Poco::Logger::get("[StorageTrace] MergeTreeRangeReader");
+    NamesAndTypesList &name_and_type_to_print;
 };
 
 }
