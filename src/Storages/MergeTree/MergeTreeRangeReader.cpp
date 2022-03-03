@@ -246,7 +246,7 @@ size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bo
 #endif
         size_t read_rows = readRows(columns, num_rows);
 #ifdef DEBUG_IN_RANGE_READER
-        LOG_TRACE(log, "[DONE] MergeTreeRangeReader::Stream::readRows, num_rows = {}, read_rows.", num_rows, read_rows);
+        LOG_TRACE(log, "[DONE] MergeTreeRangeReader::Stream::readRows, num_rows = {}, read_rows = {}.", num_rows, read_rows);
 #endif
         offset_after_current_mark += num_rows;
 
