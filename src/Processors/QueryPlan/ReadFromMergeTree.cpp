@@ -1019,6 +1019,9 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
         std::sort(column_names_to_read.begin(), column_names_to_read.end());
         column_names_to_read.erase(std::unique(column_names_to_read.begin(), column_names_to_read.end()), column_names_to_read.end());
 
+#ifdef DEBUG_IN_READ_FROM_MERGE_TREE
+        LOG_TRACE(log, "[MergeTreeTrace] spreadMarkRangesAmongStreamsFinal");
+#endif
         pipe = spreadMarkRangesAmongStreamsFinal(
             std::move(result.parts_with_ranges),
             column_names_to_read,
@@ -1033,6 +1036,9 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
         auto syntax_result = TreeRewriter(context).analyze(order_key_prefix_ast, metadata_snapshot->getColumns().getAllPhysical());
         auto sorting_key_prefix_expr = ExpressionAnalyzer(order_key_prefix_ast, syntax_result, context).getActionsDAG(false);
 
+#ifdef DEBUG_IN_READ_FROM_MERGE_TREE
+        LOG_TRACE(log, "[MergeTreeTrace] spreadMarkRangesAmongStreamsWithOrder.");
+#endif
         pipe = spreadMarkRangesAmongStreamsWithOrder(
             std::move(result.parts_with_ranges),
             column_names_to_read,
@@ -1042,6 +1048,9 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
     }
     else
     {
+#ifdef DEBUG_IN_READ_FROM_MERGE_TREE
+        LOG_TRACE(log, "[MergeTreeTrace] spreadMarkRangesAmongStreams.");
+#endif
         pipe = spreadMarkRangesAmongStreams(
             std::move(result.parts_with_ranges),
             column_names_to_read);
