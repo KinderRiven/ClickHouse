@@ -4,6 +4,8 @@
 
 #include <utility>
 
+#define DEBUG_IN_MERGE_TREE_MARLS_LOADER
+
 namespace DB
 {
 
@@ -41,6 +43,10 @@ const MarkInCompressedFile & MergeTreeMarksLoader::getMark(size_t row_index, siz
             + " is out of range [0, " + toString(columns_in_mark) + ")", ErrorCodes::LOGICAL_ERROR);
 #endif
 
+#ifdef DEBUG_IN_MERGE_TREE_MARLS_LOADER
+    LOG_TRACE(trace_log, "[getMark] row_index:{}, columns_in_mark:{}, column_index:{}, marks_count:{}",
+              row_index, columns_in_mark, column_index, marks_count);
+#endif
     return (*marks)[row_index * columns_in_mark + column_index];
 }
 

@@ -35,6 +35,8 @@ private:
     size_t columns_in_mark;
     MarkCache::MappedPtr marks;
 
+    Poco::Logger * trace_log = &Poco::Logger::get("[StorageTrace][MergeTreeMarksLoader]");
+
     void loadMarks();
     MarkCache::MappedPtr loadMarksImpl();
 };
