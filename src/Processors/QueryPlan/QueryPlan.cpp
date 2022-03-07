@@ -169,10 +169,13 @@ QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
         {
             bool limit_max_threads = frame.pipelines.empty();
 #ifdef DEBUG_IN_QUERY_PLAN
-            LOG_TRACE(trace_log, "buildQueryPipeline->[{}]step", frame.node->step->getName());
+            LOG_TRACE(trace_log, "[buildQueryPipeline][{}]step", frame.node->step->getName());
 #endif
             last_pipeline = frame.node->step->updatePipeline(std::move(frame.pipelines), build_pipeline_settings);
-
+#ifdef DEBUG_IN_QUERY_PLAN
+            LOG_TRACE(trace_log, "[buildQueryPipeline] print pipeline information.");
+            last_pipeline->PrintForDebug();
+#endif
             if (limit_max_threads && max_threads)
                 last_pipeline->limitMaxThreads(max_threads);
 

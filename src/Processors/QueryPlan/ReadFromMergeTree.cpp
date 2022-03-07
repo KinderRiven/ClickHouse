@@ -116,6 +116,10 @@ Pipe ReadFromMergeTree::readFromPool(
     size_t min_marks_for_concurrent_read,
     bool use_uncompressed_cache)
 {
+#ifdef DEBUG_IN_READ_FROM_MERGE_TREE
+    LOG_TRACE(trace_log, "[readFromPool][start] max_streams:{}, min_marks_for_concurrent_read:{}.",
+              max_streams, min_marks_for_concurrent_read);
+#endif
     Pipes pipes;
     size_t sum_marks = 0;
     size_t total_rows = 0;
@@ -125,6 +129,10 @@ Pipe ReadFromMergeTree::readFromPool(
         sum_marks += part.getMarksCount();
         total_rows += part.getRowsCount();
     }
+
+#ifdef DEBUG_IN_READ_FROM_MERGE_TREE
+    LOG_TRACE(trace_log, "[readFromPool] sum_marks:{}, total_rows:{}.", sum_marks, total_rows);
+#endif
 
     const auto & settings = context->getSettingsRef();
     MergeTreeReadPool::BackoffSettings backoff_settings(settings);
@@ -147,6 +155,9 @@ Pipe ReadFromMergeTree::readFromPool(
 
     for (size_t i = 0; i < max_streams; ++i)
     {
+#ifdef DEBUG_IN_READ_FROM_MERGE_TREE
+        LOG_TRACE(trace_log, "[readFromPool] create MergeTreeThreadSelectProcessor [{}/{}].", i, max_streams);
+#endif
         auto source = std::make_shared<MergeTreeThreadSelectProcessor>(
             i, pool, min_marks_for_concurrent_read, max_block_size,
             settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes,
@@ -307,6 +318,9 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreams(
             num_streams = std::max((info.sum_marks + info.min_marks_for_concurrent_read - 1) / info.min_marks_for_concurrent_read, parts_with_ranges.size());
     }
 
+#ifdef DEBUG_IN_READ_FROM_MERGE_TREE
+    LOG_TRACE(trace_log, "[spreadMarkRangesAmongStreams] set num stream:[before:{}][after:{}].", requested_num_streams, num_streams);
+#endif
     return read(std::move(parts_with_ranges), column_names, ReadType::Default,
                 num_streams, info.min_marks_for_concurrent_read, info.use_uncompressed_cache);
 }
@@ -935,6 +949,9 @@ ReadFromMergeTree::AnalysisResult ReadFromMergeTree::getAnalysisResult() const
 
 void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
 {
+#ifdef DEBUG_IN_READ_FROM_MERGE_TREE
+    LOG_TRACE(trace_log, "[initializePipeline][start].");
+#endif
     auto result = getAnalysisResult();
 
     LOG_DEBUG(
@@ -1133,6 +1150,10 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
         pipe.addQueryIdHolder(std::move(query_id_holder));
 
     pipeline.init(std::move(pipe));
+
+#ifdef DEBUG_IN_READ_FROM_MERGE_TREE
+    LOG_TRACE(trace_log, "[initializePipeline][end].");
+#endif
 }
 
 static const char * indexTypeToString(ReadFromMergeTree::IndexType type)
