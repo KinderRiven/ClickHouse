@@ -166,6 +166,8 @@ QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
         if (next_child == frame.node->children.size())
         {
             bool limit_max_threads = frame.pipelines.empty();
+
+            LOG_TRACE(log, "buildQueryPipeline->[{}]step", frame.node->step->getName());
             last_pipeline = frame.node->step->updatePipeline(std::move(frame.pipelines), build_pipeline_settings);
 
             if (limit_max_threads && max_threads)
