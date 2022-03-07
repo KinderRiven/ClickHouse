@@ -44,8 +44,8 @@ const MarkInCompressedFile & MergeTreeMarksLoader::getMark(size_t row_index, siz
 #endif
 
 #ifdef DEBUG_IN_MERGE_TREE_MARLS_LOADER
-    LOG_TRACE(trace_log, "[getMark] row_index:{}, columns_in_mark:{}, column_index:{}, marks_count:{}",
-              row_index, columns_in_mark, column_index, marks_count);
+    LOG_TRACE(trace_log, "[getMark] mark_path:{}, row_index:{}, columns_in_mark:{}, column_index:{}, marks_count:{}, return:{}",
+              mrk_path_, row_index, columns_in_mark, column_index, marks_count, row_index * columns_in_mark + column_index);
 #endif
     return (*marks)[row_index * columns_in_mark + column_index];
 }
@@ -68,6 +68,9 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
 
     if (!index_granularity_info.is_adaptive)
     {
+#ifdef DEBUG_IN_MERGE_TREE_MARLS_LOADER
+        LOG_TRACE(trace_log, "[loadMarksImpl] direct to read.");
+#endif
         /// Read directly to marks.
         auto buffer = disk->readFile(mrk_path, ReadSettings().adjustBufferSize(file_size), file_size);
         buffer->readStrict(reinterpret_cast<char *>(res->data()), file_size);
@@ -78,6 +81,9 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
     }
     else
     {
+#ifdef DEBUG_IN_MERGE_TREE_MARLS_LOADER
+        LOG_TRACE(trace_log, "[loadMarksImpl] not direct to read.");
+#endif
         auto buffer = disk->readFile(mrk_path, ReadSettings().adjustBufferSize(file_size), file_size);
         size_t i = 0;
         while (!buffer->eof())
