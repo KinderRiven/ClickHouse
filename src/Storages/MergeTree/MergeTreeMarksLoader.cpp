@@ -45,7 +45,7 @@ const MarkInCompressedFile & MergeTreeMarksLoader::getMark(size_t row_index, siz
 
 #ifdef DEBUG_IN_MERGE_TREE_MARLS_LOADER
     LOG_TRACE(trace_log, "[getMark] mark_path:{}, row_index:{}, columns_in_mark:{}, column_index:{}, marks_count:{}, return:{}",
-              mrk_path_, row_index, columns_in_mark, column_index, marks_count, row_index * columns_in_mark + column_index);
+              mrk_path, row_index, columns_in_mark, column_index, marks_count, row_index * columns_in_mark + column_index);
 #endif
     return (*marks)[row_index * columns_in_mark + column_index];
 }
