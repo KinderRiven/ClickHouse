@@ -947,8 +947,12 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
 #ifdef DEBUG_IN_READ_FROM_MERGE_TREE
     size_t num_part_to_read = result.parts_with_ranges.size();
     for (size_t i = 0; i < num_part_to_read; i++) {
-        // auto current_data_part = result.parts_with_ranges[i].data_part;
+        auto current_data_part = result.parts_with_ranges[i].data_part;
         // TODO PRINT DATA PART INFORMATION
+        LOG_TRACE(log, "[MergeTreeTrace][Path:{}][MarkCount:{}][Type:{}]",
+                  current_data_part->getFullPath, current_data_part->getMarksCount(),
+                  current_data_part->getTypeName());
+        // TODO PRINT [Part-Mark-Range] INFORMATION
         size_t num_range_to_read = result.parts_with_ranges[i].ranges.size();
         for(size_t j = 0; j < num_range_to_read; j++) {
             LOG_TRACE(log, "[MergeTreeTrace][Part:{}/{}][Mark:{}/{}][Range:{},{}]",
