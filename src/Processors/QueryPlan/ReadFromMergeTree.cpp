@@ -236,8 +236,9 @@ Pipe ReadFromMergeTree::read(
     /// Use ConcatProcessor to concat sources together.
     /// It is needed to read in parts order (and so in PK order) if single thread is used.
     if (read_type == ReadType::Default && pipe.numOutputPorts() > 1)
+    {
         pipe.addTransform(std::make_shared<ConcatProcessor>(pipe.getHeader(), pipe.numOutputPorts()));
-
+    }
     return pipe;
 }
 

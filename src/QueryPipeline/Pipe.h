@@ -66,6 +66,8 @@ public:
     void addTransform(ProcessorPtr transform, OutputPort * totals, OutputPort * extremes);
     void addTransform(ProcessorPtr transform, InputPort * totals, InputPort * extremes);
 
+    void PrintForDebug();
+
     enum class StreamType
     {
         Main = 0, /// Stream for query data. There may be several streams of this type.

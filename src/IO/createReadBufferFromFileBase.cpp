@@ -24,6 +24,8 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+#define DEBUG_IN_CREATE_READ_BUFFER_FROM_FILE_BASE
+static Poco::Logger * trace_log = &Poco::Logger::get("[StorageTrace][createReadBufferFromFileBase]");
 
 std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(
     const std::string & filename,
@@ -43,6 +45,9 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(
     {
         try
         {
+#ifdef DEBUG_IN_CREATE_READ_BUFFER_FROM_FILE_BASE
+            LOG_TRACE(trace_log, "Create MMapReadBufferFromFileWithCache.");
+#endif
             auto res = std::make_unique<MMapReadBufferFromFileWithCache>(*settings.mmap_cache, filename, 0);
             ProfileEvents::increment(ProfileEvents::CreatedReadBufferMMap);
             return res;
@@ -60,20 +65,32 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(
 
         if (settings.local_fs_method == LocalFSReadMethod::read)
         {
+#ifdef DEBUG_IN_CREATE_READ_BUFFER_FROM_FILE_BASE
+            LOG_TRACE(trace_log, "Create ReadBufferFromFile.");
+#endif
             res = std::make_unique<ReadBufferFromFile>(filename, buffer_size, actual_flags, existing_memory, alignment);
         }
         else if (settings.local_fs_method == LocalFSReadMethod::pread || settings.local_fs_method == LocalFSReadMethod::mmap)
         {
+#ifdef DEBUG_IN_CREATE_READ_BUFFER_FROM_FILE_BASE
+            LOG_TRACE(trace_log, "Create ReadBufferFromFilePReadWithDescriptorsCache.");
+#endif
             res = std::make_unique<ReadBufferFromFilePReadWithDescriptorsCache>(filename, buffer_size, actual_flags, existing_memory, alignment);
         }
         else if (settings.local_fs_method == LocalFSReadMethod::pread_fake_async)
         {
+#ifdef DEBUG_IN_CREATE_READ_BUFFER_FROM_FILE_BASE
+            LOG_TRACE(trace_log, "Create AsynchronousReadBufferFromFileWithDescriptorsCache.");
+#endif
             static AsynchronousReaderPtr reader = std::make_shared<SynchronousReader>();
             res = std::make_unique<AsynchronousReadBufferFromFileWithDescriptorsCache>(
                 reader, settings.priority, filename, buffer_size, actual_flags, existing_memory, alignment);
         }
         else if (settings.local_fs_method == LocalFSReadMethod::pread_threadpool)
         {
+#ifdef DEBUG_IN_CREATE_READ_BUFFER_FROM_FILE_BASE
+            LOG_TRACE(trace_log, "Create AsynchronousReadBufferFromFileWithDescriptorsCache.");
+#endif
             static AsynchronousReaderPtr reader = std::make_shared<ThreadPoolReader>(16, 1000000);
             res = std::make_unique<AsynchronousReadBufferFromFileWithDescriptorsCache>(
                 reader, settings.priority, filename, buffer_size, actual_flags, existing_memory, alignment);
