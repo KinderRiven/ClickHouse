@@ -951,7 +951,7 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
         auto current_data_part = result.parts_with_ranges[i].data_part;
         /// 1.TODO PRINT DATA PART INFORMATION
         LOG_TRACE(log, "[MergeTreeTrace][Path:{}][MarkCount:{}][Type:{}]",
-                  current_data_part->getFullPath, current_data_part->getMarksCount(),
+                  current_data_part->getFullPath(), current_data_part->getMarksCount(),
                   current_data_part->getTypeName());
         /// 2.TODO PRINT [Part-Mark-Range] INFORMATION
         size_t num_range_to_read = result.parts_with_ranges[i].ranges.size();
