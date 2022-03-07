@@ -75,7 +75,7 @@ public:
 
         bool isFinished() const { return is_finished; }
 
-        Poco::Logger * log = &Poco::Logger::get("[StorageTrace] MergeTreeRangeReader::DelayedStream");
+        Poco::Logger * trace_log = &Poco::Logger::get("[StorageTrace][MergeTreeRangeReader::DelayedStream]");
 
     private:
         size_t current_mark = 0;
@@ -144,7 +144,7 @@ public:
         void toNextMark();
         size_t ceilRowsToCompleteGranules(size_t rows_num) const;
 
-        Poco::Logger * log = &Poco::Logger::get("[StorageTrace] MergeTreeRangeReader::Stream");
+        Poco::Logger * trace_log = &Poco::Logger::get("[StorageTrace][MergeTreeRangeReader::Stream]");
     };
 
     /// Statistics after next reading step.
@@ -255,7 +255,7 @@ private:
     bool is_initialized = false;
 
     /// Something to DEBUG
-    Poco::Logger * log = &Poco::Logger::get("[StorageTrace] MergeTreeRangeReader");
+    Poco::Logger * trace_log = &Poco::Logger::get("[StorageTrace][MergeTreeRangeReader]");
 };
 
 }

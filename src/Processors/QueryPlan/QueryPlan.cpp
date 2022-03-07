@@ -12,6 +12,8 @@
 #include <Processors/QueryPlan/ReadFromMergeTree.h>
 #include <Common/JSONBuilder.h>
 
+#define DEBUG_IN_QUERY_PLAN
+
 namespace DB
 {
 
@@ -166,8 +168,9 @@ QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
         if (next_child == frame.node->children.size())
         {
             bool limit_max_threads = frame.pipelines.empty();
-
-            LOG_TRACE(log, "buildQueryPipeline->[{}]step", frame.node->step->getName());
+#ifdef DEBUG_IN_QUERY_PLAN
+            LOG_TRACE(trace_log, "buildQueryPipeline->[{}]step", frame.node->step->getName());
+#endif
             last_pipeline = frame.node->step->updatePipeline(std::move(frame.pipelines), build_pipeline_settings);
 
             if (limit_max_threads && max_threads)

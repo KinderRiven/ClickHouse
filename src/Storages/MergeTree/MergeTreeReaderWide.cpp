@@ -9,7 +9,7 @@
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
 
-#define DEBUG_IN_READER_WIDE
+// #define DEBUG_IN_READER_WIDE
 
 namespace DB
 {
@@ -70,7 +70,7 @@ size_t MergeTreeReaderWide::readRows(
     try
     {
 #ifdef DEBUG_IN_READER_WIDE
-        LOG_TRACE(log, "[BEGIN] MergeTreeReaderWide::readRows, mark_range [{}, {}].", from_mark, current_task_last_mark);
+        LOG_TRACE(trace_log, "[BEGIN] readRows, mark_range [{}, {}].", from_mark, current_task_last_mark);
 #endif
         size_t num_columns = columns.size();
         checkNumberOfColumns(num_columns);
@@ -119,13 +119,13 @@ size_t MergeTreeReaderWide::readRows(
                 auto & cache = caches[column_from_part.getNameInStorage()];
                 // TODO LOG
 #ifdef DEBUG_IN_READER_WIDE
-                LOG_TRACE(log, "[DO] MergeTreeReaderWide::readData, mark_range [{},{}].", from_mark, current_task_last_mark);
+                LOG_TRACE(trace_log, "[DO] readData, mark_range [{},{}].", from_mark, current_task_last_mark);
 #endif
                 readData(
                     column_from_part, column, from_mark, continue_reading, current_task_last_mark,
                     max_rows_to_read, cache, /* was_prefetched =*/ !prefetched_streams.empty());
 #ifdef DEBUG_IN_READER_WIDE
-                LOG_TRACE(log, "[DONE] MergeTreeReaderWide::readData, mark_range [{},{}].", from_mark, current_task_last_mark);
+                LOG_TRACE(trace_log, "[DONE] readData, mark_range [{},{}].", from_mark, current_task_last_mark);
 #endif
                 /// For elements of Nested, column_size_before_reading may be greater than column size
                 ///  if offsets are not empty and were already read, but elements are empty.
@@ -147,7 +147,7 @@ size_t MergeTreeReaderWide::readRows(
         /// In particular, even if for some streams there are no rows to be read,
         /// you must ensure that no seeks are skipped and at this point they all point to to_mark.
 #ifdef DEBUG_IN_READER_WIDE
-        LOG_TRACE(log, "[BEGIN] MergeTreeReaderWide::readRows, mark_range [{}, {}].", from_mark, current_task_last_mark);
+        LOG_TRACE(trace_log, "[BEGIN] readRows, mark_range [{}, {}].", from_mark, current_task_last_mark);
 #endif
     }
     catch (Exception & e)
@@ -177,8 +177,6 @@ void MergeTreeReaderWide::addStreams(const NameAndTypePair & name_and_type,
     ISerialization::StreamCallback callback = [&] (const ISerialization::SubstreamPath & substream_path)
     {
         String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
-        // TODO LOG
-        // LOG_TRACE(log, "addStream::getFileNameForStream", stream_name);
 
         if (streams.count(stream_name))
             return;
@@ -219,8 +217,6 @@ static ReadBuffer * getStream(
         return nullptr;
 
     String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
-    // TODO LOG
-    // LOG_TRACE(log, "getStream::getFileNameForStream", stream_name);
 
     auto it = streams.find(stream_name);
     if (it == streams.end())

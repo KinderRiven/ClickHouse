@@ -41,7 +41,7 @@ private:
     Serializations serializations;
     DiskPtr disk;
 
-    Poco::Logger * log = &Poco::Logger::get("[StorageTrace] MergeTreeReaderWide");
+    Poco::Logger * trace_log = &Poco::Logger::get("[StorageTrace][MergeTreeReaderWide]");
 
     void addStreams(const NameAndTypePair & name_and_type,
         const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type);

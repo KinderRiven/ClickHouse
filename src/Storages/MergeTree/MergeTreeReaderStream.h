@@ -60,7 +60,7 @@ private:
 
     MergeTreeMarksLoader marks_loader;
 
-    Poco::Logger * log = &Poco::Logger::get("[StorageTrace] MergeTreeReaderStream");
+    Poco::Logger * trace_log = &Poco::Logger::get("[StorageTrace][MergeTreeReaderStream]");
 
 };
 }

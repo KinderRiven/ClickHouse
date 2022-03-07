@@ -389,6 +389,10 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
 
     for (size_t i = 0; i < requested_num_streams && !parts_with_ranges.empty(); ++i)
     {
+#ifdef DEBUG_IN_READ_FROM_MERGE_TREE
+        LOG_TRACE(trace_log, "[spreadMarkRangesAmongStreamsWithOrder][stream:{}/{}][parts_with_ranges:{}]",
+                  i, requested_num_streams, parts_with_ranges.size());
+#endif
         size_t need_marks = min_marks_per_stream;
         RangesInDataParts new_parts;
 
@@ -950,13 +954,13 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
     for (size_t i = 0; i < num_part_to_read; i++) {
         auto current_data_part = result.parts_with_ranges[i].data_part;
         /// 1.TODO PRINT DATA PART INFORMATION
-        LOG_TRACE(log, "[MergeTreeTrace][Path:{}][MarkCount:{}][Type:{}]",
+        LOG_TRACE(trace_log, "[initializePipeline][Path:{}][MarkCount:{}][Type:{}]",
                   current_data_part->getFullPath(), current_data_part->getMarksCount(),
                   current_data_part->getTypeName());
         /// 2.TODO PRINT [Part-Mark-Range] INFORMATION
         size_t num_range_to_read = result.parts_with_ranges[i].ranges.size();
         for(size_t j = 0; j < num_range_to_read; j++) {
-            LOG_TRACE(log, "[MergeTreeTrace][Part:{}/{}][Mark:{}/{}][Range:{},{}]",
+            LOG_TRACE(trace_log, "[initializePipeline][Part:{}/{}][Mark:{}/{}][Range:{},{}]",
                       i, num_part_to_read,
                       j, num_range_to_read,
                       result.parts_with_ranges[i].ranges[j].begin, result.parts_with_ranges[i].ranges[j].end);
@@ -1020,7 +1024,7 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
         column_names_to_read.erase(std::unique(column_names_to_read.begin(), column_names_to_read.end()), column_names_to_read.end());
 
 #ifdef DEBUG_IN_READ_FROM_MERGE_TREE
-        LOG_TRACE(log, "[MergeTreeTrace] spreadMarkRangesAmongStreamsFinal");
+        LOG_TRACE(trace_log, "[initializePipeline] call for spreadMarkRangesAmongStreamsFinal");
 #endif
         pipe = spreadMarkRangesAmongStreamsFinal(
             std::move(result.parts_with_ranges),
@@ -1037,7 +1041,7 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
         auto sorting_key_prefix_expr = ExpressionAnalyzer(order_key_prefix_ast, syntax_result, context).getActionsDAG(false);
 
 #ifdef DEBUG_IN_READ_FROM_MERGE_TREE
-        LOG_TRACE(log, "[MergeTreeTrace] spreadMarkRangesAmongStreamsWithOrder.");
+        LOG_TRACE(log, "[initializePipeline] call for spreadMarkRangesAmongStreamsWithOrder.");
 #endif
         pipe = spreadMarkRangesAmongStreamsWithOrder(
             std::move(result.parts_with_ranges),
@@ -1049,7 +1053,7 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
     else
     {
 #ifdef DEBUG_IN_READ_FROM_MERGE_TREE
-        LOG_TRACE(log, "[MergeTreeTrace] spreadMarkRangesAmongStreams.");
+        LOG_TRACE(log, "[initializePipeline] call for spreadMarkRangesAmongStreams.");
 #endif
         pipe = spreadMarkRangesAmongStreams(
             std::move(result.parts_with_ranges),

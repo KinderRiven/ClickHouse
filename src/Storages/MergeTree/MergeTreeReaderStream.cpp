@@ -14,7 +14,7 @@ namespace ErrorCodes
     extern const int CANNOT_READ_ALL_DATA;
 }
 
-#define DEBUG_IN_MERGE_TREE_STREAM
+// #define DEBUG_IN_MERGE_TREE_STREAM
 
 MergeTreeReaderStream::MergeTreeReaderStream(
         DiskPtr disk_,
@@ -111,7 +111,7 @@ MergeTreeReaderStream::MergeTreeReaderStream(
 std::pair<size_t, size_t> MergeTreeReaderStream::getRightOffsetAndBytesRange(size_t left_mark, size_t right_mark)
 {
 #ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(log, "[BEGIN] MergeTreeReaderStream::getRightOffsetAndBytesRange with range [{},{}].", left_mark, right_mark);
+    LOG_TRACE(trace_log, "[getRightOffsetAndBytesRange][start] with range [{},{}].", left_mark, right_mark);
 #endif
     /// NOTE: if we are reading the whole file, then right_mark == marks_count
     /// and we will use max_read_buffer_size for buffer size, thus avoiding the need to load marks.
@@ -147,7 +147,7 @@ std::pair<size_t, size_t> MergeTreeReaderStream::getRightOffsetAndBytesRange(siz
     }
 
 #ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(log, "[BEGIN] MergeTreeReaderStream::getRightOffsetAndBytesRange with range [{},{}].", left_mark, right_mark);
+    LOG_TRACE(trace_log, "[getRightOffsetAndBytesRange][end] with range [{},{}].", left_mark, right_mark);
 #endif
     return std::make_pair(right_offset, mark_range_bytes);
 }
@@ -156,7 +156,7 @@ std::pair<size_t, size_t> MergeTreeReaderStream::getRightOffsetAndBytesRange(siz
 void MergeTreeReaderStream::seekToMark(size_t index)
 {
 #ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(log, "[BEGIN] MergeTreeReaderStream::seekToMark to index {}.", index);
+    LOG_TRACE(trace_log, "[seekToMark][start] with index {}.", index);
 #endif
     MarkInCompressedFile mark = marks_loader.getMark(index);
     try
@@ -178,7 +178,7 @@ void MergeTreeReaderStream::seekToMark(size_t index)
         throw;
     }
 #ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(log, "[END] MergeTreeReaderStream::seekToMark to index {}.", index);
+    LOG_TRACE(trace_log, "[seekToMark][end] with index {}.", index);
 #endif
 }
 
@@ -186,7 +186,7 @@ void MergeTreeReaderStream::seekToMark(size_t index)
 void MergeTreeReaderStream::seekToStart()
 {
 #ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(log, "[BEGIN] MergeTreeReaderStream::seekToStart.");
+    LOG_TRACE(trace_log, "[seekToStart][start].");
 #endif
     try
     {
@@ -204,7 +204,7 @@ void MergeTreeReaderStream::seekToStart()
         throw;
     }
 #ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(log, "[END] MergeTreeReaderStream::seekToStart.");
+    LOG_TRACE(trace_log, "[seekToStart][end]");
 #endif
 }
 
@@ -212,20 +212,14 @@ void MergeTreeReaderStream::seekToStart()
 void MergeTreeReaderStream::adjustForRange(MarkRange range)
 {
 #ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(log, "[BEGIN] MergeTreeReaderStream::adjustForRange, mark_range [{}, {}].", range.begin, range.end);
+    LOG_TRACE(trace_log, "[adjustForRange][start] mark_range [{}, {}].", range.begin, range.end);
 #endif
     /**
      * Note: this method is called multiple times for the same range of marks -- each time we
      * read from stream, but we must update last_right_offset only if it is bigger than
      * the last one to avoid redundantly cancelling prefetches.
      */
-#ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(log, "[DO] MergeTreeReaderStream::adjustForRange.");
-#endif
     auto [right_offset, mark_range_bytes] = getRightOffsetAndBytesRange(range.begin, range.end);
-#ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(log, "[DONE] MergeTreeReaderStream::adjustForRange->getRightOffsetAndBytesRange, mark_range [{}, {}].", right_offset, mark_range_bytes);
-#endif
 
     if (!right_offset)
     {
@@ -250,7 +244,7 @@ void MergeTreeReaderStream::adjustForRange(MarkRange range)
             non_cached_buffer->setReadUntilPosition(right_offset);
     }
 #ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(log, "[END] MergeTreeReaderStream::adjustForRange, mark_range [{}, {}].", range.begin, range.end);
+    LOG_TRACE(trace_log, "[adjustForRange][end] mark_range [{}, {}].", range.begin, range.end);
 #endif
 }
 

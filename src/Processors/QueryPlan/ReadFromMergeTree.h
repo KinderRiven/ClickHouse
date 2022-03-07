@@ -154,6 +154,9 @@ private:
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read;
 
     Poco::Logger * log;
+
+    Poco::Logger * trace_log = &Poco::Logger::get("[StorageTrace][ReadFromMergeTree]");
+
     UInt64 selected_parts = 0;
     UInt64 selected_rows = 0;
     UInt64 selected_marks = 0;

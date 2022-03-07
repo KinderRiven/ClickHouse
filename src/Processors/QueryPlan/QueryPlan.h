@@ -116,7 +116,7 @@ private:
     size_t max_threads = 0;
     std::vector<ContextPtr> interpreter_context;
 
-    Poco::Logger * log = &Poco::Logger::get("[QueryPlanTrace] QueryPlan");
+    Poco::Logger * trace_log = &Poco::Logger::get("[StorageTrace][QueryPlan]");
 };
 
 std::string debugExplainStep(const IQueryPlanStep & step);

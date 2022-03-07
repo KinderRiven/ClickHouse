@@ -157,6 +157,9 @@ public:
     static Pipe getPipe(QueryPipelineBuilder pipeline) { return std::move(pipeline.pipe); }
     static QueryPipeline getPipeline(QueryPipelineBuilder builder);
 
+    /// JUST FOR DEBUG
+    void PrintForDebug();
+
 private:
 
     Pipe pipe;
@@ -176,6 +179,8 @@ private:
     void setCollectedProcessors(Processors * processors);
 
     friend class QueryPipelineProcessorsCollector;
+
+    Poco::Logger * log = &Poco::Logger::get("[PipelineTrace][PipelineBuilder]");
 };
 
 /// This is a small class which collects newly added processors to QueryPipeline.
