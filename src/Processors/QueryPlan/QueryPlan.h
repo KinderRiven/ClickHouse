@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Names.h>
+#include <base/logger_useful.h>
 #include <Interpreters/Context_fwd.h>
 #include <Columns/IColumn.h>
 
