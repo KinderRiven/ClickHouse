@@ -25,6 +25,8 @@
 #include <base/logger_useful.h>
 #include <Common/JSONBuilder.h>
 
+#define DEBUG_IN_READ_FROM_MERGE_TREE
+
 namespace ProfileEvents
 {
     extern const Event SelectedParts;
@@ -930,6 +932,7 @@ ReadFromMergeTree::AnalysisResult ReadFromMergeTree::getAnalysisResult() const
 void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
 {
     auto result = getAnalysisResult();
+
     LOG_DEBUG(
         log,
         "Selected {}/{} parts by partition key, {} parts by primary key, {}/{} marks by primary key, {} marks to read from {} ranges",
@@ -940,6 +943,19 @@ void ReadFromMergeTree::initializePipeline(QueryPipelineBuilder & pipeline, cons
         result.total_marks_pk,
         result.selected_marks,
         result.selected_ranges);
+
+#ifdef DEBUG_IN_READ_FROM_MERGE_TREE
+    size_t num_part_to_read = result.parts_with_ranges.size();
+    for (auto i = 0; i < num_part_to_read; i++) {
+        size_t num_range_to_read = result.parts_with_ranges[i].ranges.size();
+        for(auto j = 0; j < num_range_to_read; j++) {
+            LOG_TRACE(log, "[MergeTreeTrace][Part:{}/{}][Mark:{}/{}][Range:{},{}]",
+                      i, num_part_to_read,
+                      j, num_range_to_read,
+                      result.parts_with_ranges[i].ranges[j].begin, result.parts_with_ranges[i].ranges[j].end);
+        }
+    }
+#endif
 
     ProfileEvents::increment(ProfileEvents::SelectedParts, result.selected_parts);
     ProfileEvents::increment(ProfileEvents::SelectedRanges, result.selected_ranges);
