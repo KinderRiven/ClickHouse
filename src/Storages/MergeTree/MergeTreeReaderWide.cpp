@@ -52,6 +52,7 @@ MergeTreeReaderWide::MergeTreeReaderWide(
         part_name = data_part->name;
         part_path = data_part->relative_path;
         table_name = data_part->storage.getStorageID().getTableName();
+        IMergeTreeIOTrace::instance();
 #endif
         disk = data_part->volume->getDisk();
         for (const NameAndTypePair & column : columns)
