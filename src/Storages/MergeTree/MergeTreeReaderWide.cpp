@@ -9,7 +9,7 @@
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
 
-// #define DEBUG_IN_READER_WIDE
+#define DEBUG_IN_READER_WIDE
 
 namespace DB
 {
@@ -70,7 +70,7 @@ size_t MergeTreeReaderWide::readRows(
     try
     {
 #ifdef DEBUG_IN_READER_WIDE
-        LOG_TRACE(trace_log, "[BEGIN] readRows, mark_range [{}, {}].", from_mark, current_task_last_mark);
+        LOG_TRACE(trace_log, "[readRows] mark_range [{}, {}].", from_mark, current_task_last_mark);
 #endif
         size_t num_columns = columns.size();
         checkNumberOfColumns(num_columns);
@@ -119,14 +119,11 @@ size_t MergeTreeReaderWide::readRows(
                 auto & cache = caches[column_from_part.getNameInStorage()];
                 // TODO LOG
 #ifdef DEBUG_IN_READER_WIDE
-                LOG_TRACE(trace_log, "[DO] readData, mark_range [{},{}].", from_mark, current_task_last_mark);
+                LOG_TRACE(trace_log, "[readRows] readData, mark_range [{},{}].", from_mark, current_task_last_mark);
 #endif
                 readData(
                     column_from_part, column, from_mark, continue_reading, current_task_last_mark,
                     max_rows_to_read, cache, /* was_prefetched =*/ !prefetched_streams.empty());
-#ifdef DEBUG_IN_READER_WIDE
-                LOG_TRACE(trace_log, "[DONE] readData, mark_range [{},{}].", from_mark, current_task_last_mark);
-#endif
                 /// For elements of Nested, column_size_before_reading may be greater than column size
                 ///  if offsets are not empty and were already read, but elements are empty.
                 if (!column->empty())
@@ -146,9 +143,6 @@ size_t MergeTreeReaderWide::readRows(
         /// NOTE: positions for all streams must be kept in sync.
         /// In particular, even if for some streams there are no rows to be read,
         /// you must ensure that no seeks are skipped and at this point they all point to to_mark.
-#ifdef DEBUG_IN_READER_WIDE
-        LOG_TRACE(trace_log, "[BEGIN] readRows, mark_range [{}, {}].", from_mark, current_task_last_mark);
-#endif
     }
     catch (Exception & e)
     {

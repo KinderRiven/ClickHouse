@@ -660,7 +660,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
         size_t num_read_rows;
         Columns columns = continueReadingChain(read_result, num_read_rows);
 #ifdef DEBUG_IN_RANGE_READER
-        LOG_TRACE(trace_log, "read->continueReadingChain, "
+        LOG_TRACE(trace_log, "[read] continueReadingChain, "
                        "column:{}, result.numReadRows = {}, num_read_rows = {}.",
                   columns.size(), read_result.numReadRows(), num_read_rows);
 #endif
@@ -747,7 +747,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
         read_result = startReadingChain(max_rows, ranges);
         read_result.num_rows = read_result.numReadRows();
 #ifdef DEBUG_IN_RANGE_READER
-        LOG_TRACE(trace_log, "read->startReadingChain, read_result.num_rows = {}", read_result.num_rows);
+        LOG_TRACE(trace_log, "[read] startReadingChain, read_result.num_rows = {}", read_result.num_rows);
 #endif
 
         if (read_result.num_rows)
@@ -784,6 +784,9 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
 
 MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t max_rows, MarkRanges & ranges)
 {
+#ifdef DEBUG_IN_RANGE_READER
+    LOG_TRACE(trace_log, "[startReadingChain].");
+#endif
     ReadResult result;
     result.columns.resize(merge_tree_reader->getColumns().size());
 
@@ -841,6 +844,9 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
 
 Columns MergeTreeRangeReader::continueReadingChain(ReadResult & result, size_t & num_rows)
 {
+#ifdef DEBUG_IN_RANGE_READER
+    LOG_TRACE(trace_log, "[continueReadingChain].");
+#endif
     Columns columns;
     num_rows = 0;
 
