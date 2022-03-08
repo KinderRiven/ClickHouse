@@ -49,11 +49,10 @@ MergeTreeReaderWide::MergeTreeReaderWide(
     try
     {
 #ifdef DEBUG_IN_READER_WIDE
-        part_name = data_part_->name;
-        part_path = data_part_->relative_path;
-        table_name = data_part_->getStorageID().table_name;
+        part_name = data_part->name;
+        part_path = data_part->relative_path;
+        table_name = data_part->storage.getStorageID().getTableName();
 #endif
-
         disk = data_part->volume->getDisk();
         for (const NameAndTypePair & column : columns)
         {
