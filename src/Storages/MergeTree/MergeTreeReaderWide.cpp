@@ -49,9 +49,9 @@ MergeTreeReaderWide::MergeTreeReaderWide(
     try
     {
 #ifdef DEBUG_IN_READER_WIDE
-        part_name = data_part_->name;
-        part_path = data_part_->relative_path;
-        table_name = data_part_->storage.getStorageID().table_name;
+        // part_name = data_part_->name;
+        // part_path = data_part_->relative_path;
+        // table_name = data_part_->storage.getStorageID().table_name;
 #endif
 
         disk = data_part->volume->getDisk();
@@ -125,8 +125,8 @@ size_t MergeTreeReaderWide::readRows(
                 auto & cache = caches[column_from_part.getNameInStorage()];
                 // TODO LOG
 #ifdef DEBUG_IN_READER_WIDE
-                LOG_TRACE(trace_log, "[readRows] readData, table_name:{}, column:{}/{}, current_mark:{}, current_task_last_mark{}.",
-                          table_name, pos, num_columns, from_mark, current_task_last_mark);
+                LOG_TRACE(trace_log, "[readRows] readData, column:{}/{}, current_mark:{}, current_task_last_mark{}.",
+                          pos, num_columns, from_mark, current_task_last_mark);
 #endif
                 readData(
                     column_from_part, column, from_mark, continue_reading, current_task_last_mark,

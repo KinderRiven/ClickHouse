@@ -44,7 +44,6 @@ MergeTreeReadPool::MergeTreeReadPool(
     fillPerThreadInfo(threads_, sum_marks_, per_part_sum_marks, parts_ranges, min_marks_for_concurrent_read_);
 }
 
-
 MergeTreeReadTaskPtr MergeTreeReadPool::getTask(const size_t min_marks_to_read, const size_t thread, const Names & ordered_names)
 {
     const std::lock_guard lock{mutex};
@@ -188,7 +187,6 @@ void MergeTreeReadPool::profileFeedback(const ReadBufferFromFileBase::ProfileInf
     LOG_DEBUG(log, "Will lower number of threads to {}", backoff_state.current_threads);
 }
 
-
 std::vector<size_t> MergeTreeReadPool::fillPerPartInfo(const RangesInDataParts & parts)
 {
     std::vector<size_t> per_part_sum_marks;
@@ -227,7 +225,6 @@ std::vector<size_t> MergeTreeReadPool::fillPerPartInfo(const RangesInDataParts &
 
     return per_part_sum_marks;
 }
-
 
 void MergeTreeReadPool::fillPerThreadInfo(
     const size_t threads, const size_t sum_marks, std::vector<size_t> per_part_sum_marks,
