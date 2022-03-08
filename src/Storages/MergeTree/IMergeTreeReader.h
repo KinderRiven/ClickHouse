@@ -4,6 +4,7 @@
 #include <Common/HashTable/HashMap.h>
 #include <Storages/MergeTree/MergeTreeReaderStream.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
+#include <Storage/MergeTree/IMergeTreeIOTrace.h>
 
 namespace DB
 {
