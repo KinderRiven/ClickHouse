@@ -2,7 +2,7 @@
 
 #include <base/logger_useful.h>
 
-using namespace DB {
+namespace DB {
 class IMergeTreeIOTrace {
 public:
     static IMergeTreeIOTrace & instance();
