@@ -51,8 +51,7 @@ MergeTreeReaderWide::MergeTreeReaderWide(
 #ifdef DEBUG_IN_READER_WIDE
         part_name = data_part_->name;
         part_path = data_part_->relative_path;
-        table_id = data_part_->storage.getStorageID();
-        table_name = table_id.table_name;
+        table_name = data_part_->storage.getStorageID().table_name;
 #endif
 
         disk = data_part->volume->getDisk();

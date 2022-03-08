@@ -43,7 +43,6 @@ private:
 
     String part_name; /// data part
     String part_path; /// data part path
-    StorageID table_id; /// table name
     String table_name;
 
     Poco::Logger * trace_log = &Poco::Logger::get("[StorageTrace][MergeTreeReaderWide]");
