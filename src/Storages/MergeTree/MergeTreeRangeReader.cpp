@@ -116,7 +116,7 @@ size_t MergeTreeRangeReader::DelayedStream::read(Columns & columns, size_t from_
     if (position() == num_rows_before_from_mark + offset)
     {
 #ifdef LIGHT_DEBUG_IN_RANGE_READER
-        LOG_TRACE(trace_log, "[MergeTreeRangeReader::DelayedStream::readRows][Lazy]"
+        LOG_TRACE(trace_log, "[MergeTreeRangeReader::DelayedStream::read][Lazy]"
                              "[current_marks:{}][from_marks:{}][lazy_rows:{}][num_rows_to_read:{}][offset:{}]",
                   current_mark, from_mark, num_delayed_rows, num_rows, offset);
 #endif
@@ -125,6 +125,11 @@ size_t MergeTreeRangeReader::DelayedStream::read(Columns & columns, size_t from_
     }
     else
     {
+#ifdef LIGHT_DEBUG_IN_RANGE_READER
+        LOG_TRACE(trace_log, "[MergeTreeRangeReader::DelayedStream::read][Final]"
+                             "[current_marks:{}][from_marks:{}][lazy_rows:{}][num_rows_to_read:{}][offset:{}]",
+                  current_mark, from_mark, num_delayed_rows, num_rows, offset);
+#endif
         size_t read_rows = finalize(columns);
 
         continue_reading = false;
@@ -141,6 +146,11 @@ size_t MergeTreeRangeReader::DelayedStream::finalize(Columns & columns)
     /// We need to skip some rows before reading
     if (current_offset && !continue_reading)
     {
+#ifdef LIGHT_DEBUG_IN_RANGE_READER
+        LOG_TRACE(trace_log, "[MergeTreeRangeReader::DelayedStream::finalize][Skip]"
+                             "[current_marks:{}][current_offset:{}]",
+                  current_mark, current_offset);
+#endif
         for (size_t mark_num : collections::range(current_mark, index_granularity->getMarksCount()))
         {
             size_t mark_index_granularity = index_granularity->getMarkRows(mark_num);
@@ -156,6 +166,11 @@ size_t MergeTreeRangeReader::DelayedStream::finalize(Columns & columns)
         /// Skip some rows from begin of granule.
         /// We don't know size of rows in compressed granule,
         /// so have to read them and throw out.
+#ifdef LIGHT_DEBUG_IN_RANGE_READER
+        LOG_TRACE(trace_log, "[MergeTreeRangeReader::DelayedStream::finalize][Skip]"
+                             "[current_marks:{}][current_offset:{}]",
+                  current_mark, current_offset);
+#endif
         if (current_offset)
         {
             Columns tmp_columns;
@@ -164,7 +179,7 @@ size_t MergeTreeRangeReader::DelayedStream::finalize(Columns & columns)
         }
     }
 #ifdef LIGHT_DEBUG_IN_RANGE_READER
-    LOG_TRACE(trace_log, "[MergeTreeRangeReader::DelayedStream::readRows][Finalize]"
+    LOG_TRACE(trace_log, "[MergeTreeRangeReader::DelayedStream::finalize][Finalize]"
                          "[current_marks:{}][lazy_rows:{}]",
               current_mark, num_delayed_rows);
 #endif
@@ -212,7 +227,7 @@ size_t MergeTreeRangeReader::Stream::readRows(Columns & columns, size_t num_rows
                     "MergeTreeRangeReader::Stream::readRows", merge_tree_reader->data_part, nullptr, current_mark);
 #endif
 #ifdef LIGHT_DEBUG_IN_RANGE_READER
-    LOG_TRACE(trace_log, "[MergeTreeRangeReader::Stream::read][current_mark:{}][read rows:{}]",
+    LOG_TRACE(trace_log, "[MergeTreeRangeReader::Stream::readRows][current_mark:{}][read rows:{}]",
                       current_mark, num_rows);
 #endif
     size_t rows_read = stream.read(columns, current_mark, offset_after_current_mark, num_rows);
