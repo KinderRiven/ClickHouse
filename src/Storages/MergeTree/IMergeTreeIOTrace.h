@@ -14,12 +14,11 @@ class MergeTreeDataPartInMemory;
 
 class IMergeTreeIOTrace {
 public:
-    using DataPart = IMergeTreeDataPart;
-    using DataPartPtr = std::shared_ptr<const DataPart>;
+    using DataPartWidePtr = std::shared_ptr<const MergeTreeDataPartWide>;
 
     static IMergeTreeIOTrace & instance();
 
-    void addMarkTrace(DataPartPtr data_part, ColumnPtr column, size_t from_mark);
+    void addMarkTrace(DataPartWidePtr data_part, ColumnPtr column, size_t from_mark);
 
 private:
     Poco::Logger * trace_log = &Poco::Logger::get("[MergeTreeIOTrace]");
