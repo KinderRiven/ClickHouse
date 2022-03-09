@@ -807,8 +807,10 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
         {
             if (stream.isFinished())
             {
+                /// 1.read (flush)
                 auto tmp_read_rows = stream.finalize(result.columns);
                 result.addRows(tmp_read_rows);
+
 #ifdef LIGHT_DEBUG_IN_RANGE_READER
             LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][{}][finalize in stream ({})]",
                       num_read_loop, tmp_read_rows);
@@ -831,6 +833,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
             auto rows_to_read = std::min(current_space, stream.numPendingRowsInCurrentGranule());
             bool last = rows_to_read == space_left;
 
+            /// 2.read (maybe lazy)
             auto tmp_read_rows = stream.read(result.columns, rows_to_read, !last);
             result.addRows(tmp_read_rows);
 
@@ -843,13 +846,21 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
             num_read_loop++;
         }
     }
-    result.addRows(stream.finalize(result.columns));
+
+    /// 3.read (flush)
+    auto tmp_read_rows = stream.finalize(result.columns);
+    result.addRows(tmp_read_rows);
+
+#ifdef LIGHT_DEBUG_IN_RANGE_READER
+    LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][final][finalize in stream ({})]", tmp_read_rows);
+#endif
 
     /// Last granule may be incomplete.
     result.adjustLastGranule();
+
 #ifdef LIGHT_DEBUG_IN_RANGE_READER
     LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][END][count:{}][loop:{}][read_rows:{}][max_rows:{}]",
-              call_start_reading_chain_count, num_read_loop, result.num_rows, max_rows);
+              call_start_reading_chain_count, num_read_loop, result.num_read_rows, max_rows);
 #endif
     return result;
 }
