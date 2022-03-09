@@ -1,5 +1,5 @@
 #pragma once
-
+#include <Columns/IColumn.h>
 #include <base/logger_useful.h>
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/IDataType.h>
