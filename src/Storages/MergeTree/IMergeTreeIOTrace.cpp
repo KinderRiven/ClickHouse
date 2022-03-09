@@ -14,7 +14,7 @@ void IMergeTreeIOTrace::addMarkTrace(String trace, MergeTreeData::DataPartPtr da
     String part_path = data_part->getFullRelativePath();
     String column_name = "";
     size_t column_count = 0;
-    if (column != nullptr)
+    if (columns != nullptr)
     {
         column_count = columns.size();
     } else {
@@ -30,7 +30,7 @@ void IMergeTreeIOTrace::addMarkTrace(String trace, MergeTreeData::DataPartPtr da
     String table_name = data_part->storage.getStorageID().table_name;
     String part_path = data_part->getFullRelativePath();
     String column_name;
-    if (column != nullptr)
+    if (columns != nullptr)
     {
         column_name = column->getName();
     } else {
