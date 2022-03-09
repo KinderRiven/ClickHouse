@@ -29,13 +29,15 @@ void IMergeTreeIOTrace::addMarkTrace(String trace, MergeTreeData::DataPartPtr da
 {
     String table_name = data_part->storage.getStorageID().table_name;
     String part_path = data_part->getFullRelativePath();
-    String column_name;
+    String column_name = "";
+    size_t column_count = 0;
     if (columns != nullptr)
     {
-        column_name = column->getName();
+        column_count = columns.size();
     } else {
-        column_name = "UnKnow";
+        column_count = 0;
+        column_name = "NULL";
     }
-    LOG_TRACE(trace_log, "[{}][TableName:{}][DataPartPath:{}][Column:{}][MarkRange:({},{})]",
-              trace, table_name, part_path, column_name, mark_range.begin, mark_range.end);
+    LOG_TRACE(trace_log, "[{}][TableName:{}][DataPartPath:{}][ColumnCount:{}][MarkRange:({},{})]",
+              trace, table_name, part_path, column_count, mark_range.begin, mark_range.end);
 }
