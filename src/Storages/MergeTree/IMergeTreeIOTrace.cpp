@@ -12,15 +12,8 @@ void IMergeTreeIOTrace::addMarkTrace(String trace, MergeTreeData::DataPartPtr da
 {
     String table_name = data_part->storage.getStorageID().table_name;
     String part_path = data_part->getFullRelativePath();
-    String column_name = "";
-    size_t column_count = 0;
-    if (columns != nullptr)
-    {
-        column_count = columns.size();
-    } else {
-        column_count = 0;
-        column_name = "NULL";
-    }
+    String column_name = "NULL";
+    size_t column_count = columns.size();
     LOG_TRACE(trace_log, "[{}][TableName:{}][DataPartPath:{}][ColumnCount:{}][MarkRange:({},{})]",
               trace, table_name, part_path, column_count, mark, mark);
 }
@@ -29,15 +22,8 @@ void IMergeTreeIOTrace::addMarkTrace(String trace, MergeTreeData::DataPartPtr da
 {
     String table_name = data_part->storage.getStorageID().table_name;
     String part_path = data_part->getFullRelativePath();
-    String column_name = "";
-    size_t column_count = 0;
-    if (columns != nullptr)
-    {
-        column_count = columns.size();
-    } else {
-        column_count = 0;
-        column_name = "NULL";
-    }
+    String column_name = "NULL";
+    size_t column_count = columns.size();
     LOG_TRACE(trace_log, "[{}][TableName:{}][DataPartPath:{}][ColumnCount:{}][MarkRange:({},{})]",
               trace, table_name, part_path, column_count, mark_range.begin, mark_range.end);
 }
