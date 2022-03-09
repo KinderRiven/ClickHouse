@@ -821,8 +821,8 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
                     "MergeTreeRangeReader::startReadingChain::CreateStream", merge_tree_reader->data_part, nullptr, ranges.front());
 #endif
 #ifdef LIGHT_DEBUG_IN_RANGE_READER
-                LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][stream mark range({}, {})]",
-                          ranges.front().begin, ranges.front().end);
+                LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][stream mark range({}, {})][space_left:{}]",
+                          ranges.front().begin, ranges.front().end, space_left);
 #endif
                 stream = Stream(ranges.front().begin, ranges.front().end, current_task_last_mark, merge_tree_reader);
                 /// add range to result container
