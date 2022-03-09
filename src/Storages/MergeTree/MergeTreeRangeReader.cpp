@@ -125,11 +125,6 @@ size_t MergeTreeRangeReader::DelayedStream::read(Columns & columns, size_t from_
     }
     else
     {
-#ifdef LIGHT_DEBUG_IN_RANGE_READER
-        LOG_TRACE(trace_log, "[MergeTreeRangeReader::DelayedStream::readRows][Finalize]"
-                             "[current_marks:{}][from_marks:{}][lazy_rows:{}][num_rows_to_read:{}][offset:{}]",
-                  current_mark, from_mark, num_delayed_rows, num_rows, offset);
-#endif
         size_t read_rows = finalize(columns);
 
         continue_reading = false;
@@ -168,7 +163,11 @@ size_t MergeTreeRangeReader::DelayedStream::finalize(Columns & columns)
             readRows(tmp_columns, current_offset);
         }
     }
-
+#ifdef LIGHT_DEBUG_IN_RANGE_READER
+    LOG_TRACE(trace_log, "[MergeTreeRangeReader::DelayedStream::readRows][Finalize]"
+                         "[current_marks:{}][lazy_rows:{}]",
+              current_mark, num_delayed_rows);
+#endif
     size_t rows_to_read = num_delayed_rows;
     current_offset += num_delayed_rows;
     num_delayed_rows = 0;
