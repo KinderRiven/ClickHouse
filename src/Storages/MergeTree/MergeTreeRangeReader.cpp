@@ -115,11 +115,21 @@ size_t MergeTreeRangeReader::DelayedStream::read(Columns & columns, size_t from_
     /// and only increment amount delayed_rows
     if (position() == num_rows_before_from_mark + offset)
     {
+#ifdef LIGHT_DEBUG_IN_RANGE_READER
+        LOG_TRACE(trace_log, "[MergeTreeRangeReader::DelayedStream::readRows][Lazy]"
+                             "[current_marks:{}][from_marks:{}][lazy_rows:{}][num_rows_to_read:{}][offset:{}]",
+                  current_mark, from_mark, num_delayed_rows, num_rows, offset);
+#endif
         num_delayed_rows += num_rows;
         return 0;
     }
     else
     {
+#ifdef LIGHT_DEBUG_IN_RANGE_READER
+        LOG_TRACE(trace_log, "[MergeTreeRangeReader::DelayedStream::readRows][Finalize]"
+                             "[current_marks:{}][from_marks:{}][lazy_rows:{}][num_rows_to_read:{}][offset:{}]",
+                  current_mark, from_mark, num_delayed_rows, num_rows, offset);
+#endif
         size_t read_rows = finalize(columns);
 
         continue_reading = false;
@@ -146,7 +156,6 @@ size_t MergeTreeRangeReader::DelayedStream::finalize(Columns & columns)
             }
             else
                 break;
-
         }
 
         /// Skip some rows from begin of granule.
@@ -819,7 +828,6 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
             LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][read rows in stream ({})]",
                       rows_to_read);
 #endif
-
             bool last = rows_to_read == space_left;
 
             result.addRows(stream.read(result.columns, rows_to_read, !last));
