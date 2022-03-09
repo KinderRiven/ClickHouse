@@ -1,4 +1,4 @@
-#include "IMergeTreeIOTrace.h"
+#include <Storages/MergeTree/IMergeTreeIOTrace.h>
 
 using namespace DB;
 

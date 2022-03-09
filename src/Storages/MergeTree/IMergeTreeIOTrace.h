@@ -4,13 +4,11 @@
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/IDataType.h>
 #include <Storages/MergeTree/MarkRange.h>
+#include <Storages/MergeTree/IMergeTreeReader.h>
 
 namespace DB {
 
-class IMergeTreeDataPart;
 class MergeTreeDataPartWide;
-class MergeTreeDataPartCompact;
-class MergeTreeDataPartInMemory;
 
 class IMergeTreeIOTrace {
 public:
