@@ -204,9 +204,6 @@ public:
 
         Block block_before_prewhere;
 
-    public: /// DEBUG_INFO
-        size_t call_start_reading_chain_count = 0;
-
     private:
         RangesInfo started_ranges;
         /// The number of rows read from each granule.
@@ -238,6 +235,10 @@ public:
     ReadResult read(size_t max_rows, MarkRanges & ranges);
 
     const Block & getSampleBlock() const { return sample_block; }
+
+
+private: /// DEBUG_INFO
+    size_t call_start_reading_chain_count = 0;
 
 private:
 
