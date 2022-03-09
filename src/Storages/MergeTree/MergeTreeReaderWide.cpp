@@ -61,7 +61,6 @@ MergeTreeReaderWide::MergeTreeReaderWide(
     }
 }
 
-
 size_t MergeTreeReaderWide::readRows(
     size_t from_mark, size_t current_task_last_mark, bool continue_reading, size_t max_rows_to_read, Columns & res_columns)
 {
@@ -196,7 +195,6 @@ void MergeTreeReaderWide::addStreams(const NameAndTypePair & name_and_type,
     serializations.emplace(name_and_type.name, std::move(serialization));
 }
 
-
 static ReadBuffer * getStream(
     bool seek_to_start,
     const ISerialization::SubstreamPath & substream_path,
@@ -217,14 +215,21 @@ static ReadBuffer * getStream(
         return nullptr;
 
     MergeTreeReaderStream & stream = *it->second;
+
+    /// first call, MarkRange(0, current_task_last_mark)
+    /// else, MarkRange(from_mark, current_task_last_mark)
+    /// in most time, stream.adjustForRange([0, current_task_last_mark)]
     stream.adjustForRange(MarkRange(seek_to_start ? 0 : from_mark, current_task_last_mark));
 
     if (seek_to_start)
     {
+        /// first call go to there
         stream.seekToStart();
     }
     else if (seek_to_mark)
     {
+        /// seek_to_mark = !was_prefetched && !continue_reading
+        /// second go to there but not continue, thus we need to jump to reading mark.
         stream.seekToMark(from_mark);
     }
     return stream.data_buffer;
@@ -261,8 +266,9 @@ void MergeTreeReaderWide::readData(
     size_t from_mark, bool continue_reading, size_t current_task_last_mark,
     size_t max_rows_to_read, ISerialization::SubstreamsCache & cache, bool was_prefetched)
 {
-#ifdef DEBUG_IN_READER_WIDE
-    IMergeTreeIOTrace::instance().addMarkTrace("MergeTreeReaderWide::readData", data_part, column, from_mark);
+#ifdef LIGHT_DEBUG_IN_READER_WIDE
+    LOG_TRACE(trace_log, "[MergeTreeReaderWide::readData][from_mark:{}][last_mark:{}][max_rows_to_read:{}][continue:{}]",
+              from_mark, current_task_last_mark, max_rows_to_read, continue_reading);
 #endif
 
     double & avg_value_size_hint = avg_value_size_hints[name_and_type.name];

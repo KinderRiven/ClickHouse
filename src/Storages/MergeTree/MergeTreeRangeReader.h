@@ -236,12 +236,10 @@ public:
 
     const Block & getSampleBlock() const { return sample_block; }
 
-
 private: /// DEBUG_INFO
     size_t call_start_reading_chain_count = 0;
 
 private:
-
     ReadResult startReadingChain(size_t max_rows, MarkRanges & ranges);
     Columns continueReadingChain(ReadResult & result, size_t & num_rows);
     void executePrewhereActionsAndFilterColumns(ReadResult & result);

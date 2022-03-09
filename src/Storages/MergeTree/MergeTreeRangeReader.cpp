@@ -788,7 +788,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
     // MergeTreeData::DataPartPtr data_part = merge_tree_reader->data_part;
     // String data_part_path = data_part->relative_path;
     size_t num_read_loop = 0;
-    LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][count:{}][read_rows:{}][max_rows:{}]",
+    LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][START][count:{}][read_rows:{}][max_rows:{}]",
               call_start_reading_chain_count, result.num_rows, max_rows);
 #endif
     result.columns.resize(merge_tree_reader->getColumns().size());
@@ -803,10 +803,13 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
         {
             if (stream.isFinished())
             {
-                result.addRows(stream.finalize(result.columns));
+                auto tmp_read_rows = stream.finalize(result.columns);
+                result.addRows(tmp_read_rows);
 #ifdef LIGHT_DEBUG_IN_RANGE_READER
-                LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][create stream with mark range({}, {})][space_left:{}]",
-                          ranges.front().begin, ranges.front().end, space_left);
+            LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][{}][finalize in stream ({})]",
+                      num_read_loop, tmp_read_rows);
+            LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][create stream with mark range({}, {})][space_left:{}]",
+                      ranges.front().begin, ranges.front().end, space_left);
 #endif
                 stream = Stream(ranges.front().begin, ranges.front().end, current_task_last_mark, merge_tree_reader);
                 /// add range to result container
@@ -828,12 +831,12 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
             result.addRows(tmp_read_rows);
 
 #ifdef LIGHT_DEBUG_IN_RANGE_READER
-            num_read_loop++;
             LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][{}][read rows in stream ({}/{})]",
                       num_read_loop, rows_to_read, tmp_read_rows);
 #endif
             result.addGranule(rows_to_read);
             space_left = (rows_to_read > space_left ? 0 : space_left - rows_to_read);
+            num_read_loop++;
         }
     }
     result.addRows(stream.finalize(result.columns));
@@ -841,8 +844,8 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
     /// Last granule may be incomplete.
     result.adjustLastGranule();
 #ifdef LIGHT_DEBUG_IN_RANGE_READER
-    LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][count:{}][read_rows:{}][max_rows:{}]",
-              call_start_reading_chain_count, result.num_rows, max_rows);
+    LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][END][count:{}][loop:{}][read_rows:{}][max_rows:{}]",
+              call_start_reading_chain_count, num_read_loop, result.num_rows, max_rows);
 #endif
     return result;
 }
