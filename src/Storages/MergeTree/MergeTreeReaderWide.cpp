@@ -8,6 +8,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartWide.h>
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
+#include <Storages/MergeTree/IMergeTreeIOTrace.h>
 
 #define DEBUG_IN_READER_WIDE
 
