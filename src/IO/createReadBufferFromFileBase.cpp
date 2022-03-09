@@ -24,7 +24,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-#define DEBUG_IN_CREATE_READ_BUFFER_FROM_FILE_BASE
+// #define DEBUG_IN_CREATE_READ_BUFFER_FROM_FILE_BASE
 static Poco::Logger * trace_log = &Poco::Logger::get("[StorageTrace][createReadBufferFromFileBase]");
 
 std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(

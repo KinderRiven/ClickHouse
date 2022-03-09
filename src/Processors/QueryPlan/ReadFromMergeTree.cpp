@@ -25,7 +25,7 @@
 #include <base/logger_useful.h>
 #include <Common/JSONBuilder.h>
 
-#define DEBUG_IN_READ_FROM_MERGE_TREE
+// #define DEBUG_IN_READ_FROM_MERGE_TREE
 
 namespace ProfileEvents
 {

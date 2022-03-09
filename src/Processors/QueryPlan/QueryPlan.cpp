@@ -12,7 +12,7 @@
 #include <Processors/QueryPlan/ReadFromMergeTree.h>
 #include <Common/JSONBuilder.h>
 
-#define DEBUG_IN_QUERY_PLAN
+// #define DEBUG_IN_QUERY_PLAN
 
 namespace DB
 {

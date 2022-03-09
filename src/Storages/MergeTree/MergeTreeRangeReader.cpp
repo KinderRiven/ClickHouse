@@ -5,7 +5,7 @@
 #include <Interpreters/castColumn.h>
 #include <DataTypes/DataTypeNothing.h>
 
-#define DEBUG_IN_RANGE_READER
+// #define DEBUG_IN_RANGE_READER
 
 #ifdef __SSE2__
 #include <emmintrin.h>
