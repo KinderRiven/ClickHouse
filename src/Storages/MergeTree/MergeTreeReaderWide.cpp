@@ -263,7 +263,7 @@ void MergeTreeReaderWide::readData(
     size_t max_rows_to_read, ISerialization::SubstreamsCache & cache, bool was_prefetched)
 {
 #ifdef DEBUG_IN_READER_WIDE
-    IMergeTreeIOTrace::instance().addTrace(data_part, column, from_mark);
+    IMergeTreeIOTrace::instance().addMarkTrace(data_part, column, from_mark);
 #endif
 
     double & avg_value_size_hint = avg_value_size_hints[name_and_type.name];
