@@ -48,12 +48,6 @@ MergeTreeReaderWide::MergeTreeReaderWide(
 {
     try
     {
-#ifdef DEBUG_IN_READER_WIDE
-        part_name = data_part->name;
-        part_path = data_part->relative_path;
-        table_name = data_part->storage.getStorageID().getTableName();
-        IMergeTreeIOTrace::instance();
-#endif
         disk = data_part->volume->getDisk();
         for (const NameAndTypePair & column : columns)
         {
@@ -75,9 +69,9 @@ size_t MergeTreeReaderWide::readRows(
     size_t read_rows = 0;
     try
     {
-#ifdef DEBUG_IN_READER_WIDE
-        LOG_TRACE(trace_log, "[readRows] from_mark:{}, current_task_last_mark:{}.", from_mark, current_task_last_mark);
-#endif
+// #ifdef DEBUG_IN_READER_WIDE
+//         LOG_TRACE(trace_log, "[readRows] from_mark:{}, current_task_last_mark:{}.", from_mark, current_task_last_mark);
+// #endif
         size_t num_columns = columns.size();
         checkNumberOfColumns(num_columns);
 
@@ -124,10 +118,10 @@ size_t MergeTreeReaderWide::readRows(
                 size_t column_size_before_reading = column->size();
                 auto & cache = caches[column_from_part.getNameInStorage()];
                 // TODO LOG
-#ifdef DEBUG_IN_READER_WIDE
-                LOG_TRACE(trace_log, "[readRows] readData, table_name:{}, column:{}/{}, current_mark:{}, current_task_last_mark{}.",
-                          table_name, pos, num_columns, from_mark, current_task_last_mark);
-#endif
+// #ifdef DEBUG_IN_READER_WIDE
+//                 LOG_TRACE(trace_log, "[readRows] readData, table_name:{}, column:{}/{}, current_mark:{}, current_task_last_mark{}.",
+//                           table_name, pos, num_columns, from_mark, current_task_last_mark);
+// #endif
                 readData(
                     column_from_part, column, from_mark, continue_reading, current_task_last_mark,
                     max_rows_to_read, cache, /* was_prefetched =*/ !prefetched_streams.empty());
@@ -267,6 +261,10 @@ void MergeTreeReaderWide::readData(
     size_t from_mark, bool continue_reading, size_t current_task_last_mark,
     size_t max_rows_to_read, ISerialization::SubstreamsCache & cache, bool was_prefetched)
 {
+#ifdef DEBUG_IN_READER_WIDE
+    IMergeTreeIOTrace::instance().addTrace(data_part, column, from_mark);
+#endif
+
     double & avg_value_size_hint = avg_value_size_hints[name_and_type.name];
     ISerialization::DeserializeBinaryBulkSettings deserialize_settings;
     deserialize_settings.avg_value_size_hint = avg_value_size_hint;
