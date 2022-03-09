@@ -11,10 +11,10 @@ namespace DB {
 #define LIGHT_DEBUG_IN_RANGE_READER
 // #define LIGHT_DEBUG_IN_READER_STREAM
 
-// #define DEBUG_IN_RANGE_READER
+#define DEBUG_IN_RANGE_READER
 // #define DEBUG_IN_RANGE_READER_STREAM
 // #define DEBUG_IN_RANGE_READER_DELAYED_STREAM
-#define LIGHT_DEBUG_IN_READER_WIDE
+// #define LIGHT_DEBUG_IN_READER_WIDE
 // #define DEBUG_IN_READER_WIDE
 // #define DEBUG_IN_READER_STREAM
 
@@ -22,12 +22,13 @@ class MergeTreeDataPartWide;
 
 class IMergeTreeIOTrace {
 public:
+    using Columns = std::vector<ColumnPtr>;
 
     static IMergeTreeIOTrace & instance();
 
-    void addMarkTrace(String trace, MergeTreeData::DataPartPtr data_part, ColumnPtr column, size_t mark);
+    void addMarkTrace(String trace, MergeTreeData::DataPartPtr data_part, Columns & column, size_t mark);
 
-    void addMarkTrace(String trace, MergeTreeData::DataPartPtr data_part, ColumnPtr column, MarkRange mark_range);
+    void addMarkTrace(String trace, MergeTreeData::DataPartPtr data_part, Columns & column, MarkRange mark_range);
 
 private:
     Poco::Logger * trace_log = &Poco::Logger::get("[MergeTreeIOTrace]");

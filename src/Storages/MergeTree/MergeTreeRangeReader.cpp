@@ -243,6 +243,10 @@ size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bo
     if (num_rows)
     {
         checkNotFinished();
+#ifdef DEBUG_IN_RANGE_READER
+        IMergeTreeIOTrace::instance().addMarkTrace(
+            "MergeTreeRangeReader::Stream::read", merge_tree_reader->data_part, columns, current_mark);
+#endif
         size_t read_rows = readRows(columns, num_rows);
         offset_after_current_mark += num_rows;
 
