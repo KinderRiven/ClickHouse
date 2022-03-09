@@ -860,7 +860,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
 
 #ifdef LIGHT_DEBUG_IN_RANGE_READER
     LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][END][count:{}][loop:{}][read_rows:{}][max_rows:{}]",
-              call_start_reading_chain_count, num_read_loop, result.num_read_rows, max_rows);
+              call_start_reading_chain_count, num_read_loop, result.numReadRows(), max_rows);
 #endif
     return result;
 }
