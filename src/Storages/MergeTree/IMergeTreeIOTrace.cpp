@@ -8,11 +8,33 @@ IMergeTreeIOTrace & IMergeTreeIOTrace::instance()
     return ret;
 }
 
-void IMergeTreeIOTrace::addMarkTrace(MergeTreeData::DataPartPtr data_part, ColumnPtr column, size_t from_mark)
+void IMergeTreeIOTrace::addMarkTrace(String trace, MergeTreeData::DataPartPtr data_part, ColumnPtr column, size_t mark)
 {
     String table_name = data_part->storage.getStorageID().table_name;
     String part_path = data_part->getFullRelativePath();
-    String column_name = column->getName();
-    LOG_TRACE(trace_log, "[TableName:{}][DataPartPath:{}][Column:{}][Mark:{}]",
-                                     table_name, part_path, column_name, from_mark);
+    String column_name;
+
+    if (column != nullptr)
+    {
+        column_name = column->getName();
+    } else {
+        column_name = "UnKnow";
+    }
+    LOG_TRACE(trace_log, "[{}][TableName:{}][DataPartPath:{}][Column:{}][MarkRange:({},{})]",
+              trace, table_name, part_path, column_name, mark, mark);
+}
+
+void IMergeTreeIOTrace::addMarkTrace(String trace, MergeTreeData::DataPartPtr data_part, ColumnPtr column, MarkRange mark_range)
+{
+    String table_name = data_part->storage.getStorageID().table_name;
+    String part_path = data_part->getFullRelativePath();
+
+    if (column != nullptr)
+    {
+        column_name = column->getName();
+    } else {
+        column_name = "UnKnow";
+    }
+    LOG_TRACE(trace_log, "[{}][TableName:{}][DataPartPath:{}][Column:{}][MarkRange:({},{})]",
+              trace, table_name, part_path, column_name, mark_range.begin, mark_range.end);
 }

@@ -8,6 +8,11 @@
 
 namespace DB {
 
+#define DEBUG_IN_RANGE_READER
+#define DEBUG_IN_RANGE_READER_STREAM
+#define DEBUG_IN_RANGE_READER_DELAYED_STREAM
+#define DEBUG_IN_READER_WIDE
+
 class MergeTreeDataPartWide;
 
 class IMergeTreeIOTrace {
@@ -15,7 +20,9 @@ public:
 
     static IMergeTreeIOTrace & instance();
 
-    void addMarkTrace(MergeTreeData::DataPartPtr data_part, ColumnPtr column, size_t from_mark);
+    void addMarkTrace(String trace, MergeTreeData::DataPartPtr data_part, ColumnPtr column, size_t mark);
+
+    void addMarkTrace(String trace, MergeTreeData::DataPartPtr data_part, ColumnPtr column, MarkRange mark_range);
 
 private:
     Poco::Logger * trace_log = &Poco::Logger::get("[MergeTreeIOTrace]");

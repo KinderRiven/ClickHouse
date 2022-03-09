@@ -4,8 +4,8 @@
 #include <base/range.h>
 #include <Interpreters/castColumn.h>
 #include <DataTypes/DataTypeNothing.h>
+#include <Storages/MergeTree/IMergeTreeIOTrace.h>
 
-// #define DEBUG_IN_RANGE_READER
 
 #ifdef __SSE2__
 #include <emmintrin.h>
@@ -84,9 +84,9 @@ size_t MergeTreeRangeReader::DelayedStream::readRows(Columns & columns, size_t n
 {
     if (num_rows)
     {
-#ifdef DEBUG_IN_RANGE_READER
-        LOG_TRACE(trace_log, "[readRows] current_mark = {}, offset_after_current_mark = {}.",
-                  current_mark, current_task_last_mark);
+#ifdef DEBUG_IN_RANGE_READER_DELAYED_STREAM
+        IMergeTreeIOTrace::instance().addMarkTrace(
+                    "MergeTreeRangeReader::DelayedStream::readRows", merge_tree_reader->data_part, nullptr, current_mark);
 #endif
         size_t rows_read = merge_tree_reader->readRows(
             current_mark, current_task_last_mark, continue_reading, num_rows, columns);
@@ -196,9 +196,9 @@ void MergeTreeRangeReader::Stream::checkEnoughSpaceInCurrentGranule(size_t num_r
 
 size_t MergeTreeRangeReader::Stream::readRows(Columns & columns, size_t num_rows)
 {
-#ifdef DEBUG_IN_RANGE_READER
-    LOG_TRACE(trace_log, "[readRows] current_mark = {}, offset_after_current_mark = {}.",
-              current_mark, offset_after_current_mark);
+#ifdef DEBUG_IN_RANGE_READER_STREAM
+    IMergeTreeIOTrace::instance().addMarkTrace(
+                    "MergeTreeRangeReader::Stream::readRows", merge_tree_reader->data_part, nullptr, current_mark);
 #endif
     size_t rows_read = stream.read(columns, current_mark, offset_after_current_mark, num_rows);
 
@@ -233,11 +233,6 @@ size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bo
         checkNotFinished();
 
         size_t read_rows = readRows(columns, num_rows);
-
-#ifdef DEBUG_IN_RANGE_READER
-        LOG_TRACE(trace_log, "[read] num_columns = {}, num_rows = {}, read_rows = {}.",
-                  columns.size(), num_rows, read_rows);
-#endif
         offset_after_current_mark += num_rows;
 
         /// Start new granule; skipped_rows_after_offset is already zero.
@@ -554,17 +549,17 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     for (const auto & name_and_type : merge_tree_reader->getColumns())
         sample_block.insert({name_and_type.type->createColumn(), name_and_type.type, name_and_type.name});
 
-#ifdef DEBUG_IN_RANGE_READER
-    const auto &name_and_type_to_print = merge_tree_reader->getColumns();
-    Names names = name_and_type_to_print.getNames();
-    int i = 0;
-    size_t name_count = names.size();
-    for (auto it = names.begin(); it != names.end(); it++) {
-        i++;
-        std::string name = *it;
-        LOG_TRACE(trace_log, "MergeTreeRangeReader ColumnName {}, {}/{}.", name, i, name_count);
-    }
-#endif
+// #ifdef DEBUG_IN_RANGE_READER
+//    const auto &name_and_type_to_print = merge_tree_reader->getColumns();
+//    Names names = name_and_type_to_print.getNames();
+//    int i = 0;
+//    size_t name_count = names.size();
+//    for (auto it = names.begin(); it != names.end(); it++) {
+//        i++;
+//        std::string name = *it;
+//        LOG_TRACE(trace_log, "MergeTreeRangeReader ColumnName {}, {}/{}.", name, i, name_count);
+//    }
+//#endif
 
     if (prewhere_info)
     {
@@ -659,11 +654,6 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
 
         size_t num_read_rows;
         Columns columns = continueReadingChain(read_result, num_read_rows);
-#ifdef DEBUG_IN_RANGE_READER
-        LOG_TRACE(trace_log, "[read] continueReadingChain, "
-                       "column:{}, result.numReadRows = {}, num_read_rows = {}.",
-                  columns.size(), read_result.numReadRows(), num_read_rows);
-#endif
 
         /// Nothing to do. Return empty result.
         if (read_result.num_rows == 0)
@@ -746,9 +736,6 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
         /// need to use : stream、delay stream
         read_result = startReadingChain(max_rows, ranges);
         read_result.num_rows = read_result.numReadRows();
-#ifdef DEBUG_IN_RANGE_READER
-        LOG_TRACE(trace_log, "[read] startReadingChain, read_result.num_rows = {}", read_result.num_rows);
-#endif
 
         if (read_result.num_rows)
         {
@@ -784,9 +771,6 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
 
 MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t max_rows, MarkRanges & ranges)
 {
-#ifdef DEBUG_IN_RANGE_READER
-    LOG_TRACE(trace_log, "[startReadingChain].");
-#endif
     ReadResult result;
     result.columns.resize(merge_tree_reader->getColumns().size());
 
@@ -803,9 +787,8 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
             {
                 result.addRows(stream.finalize(result.columns));
 #ifdef DEBUG_IN_RANGE_READER
-                /// stream creator
-                LOG_TRACE(trace_log, "[startReadingChain] create stream with mark_range [{}, {}]",
-                          ranges.front().begin, ranges.front().end);
+                IMergeTreeIOTrace::instance().addMarkTrace(
+                    "MergeTreeRangeReader::startReadingChain::CreateStream", merge_tree_reader->data_part, nullptr, ranges.front());
 #endif
                 stream = Stream(ranges.front().begin, ranges.front().end, current_task_last_mark, merge_tree_reader);
                 /// add range to result container
@@ -823,12 +806,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
             auto rows_to_read = std::min(current_space, stream.numPendingRowsInCurrentGranule());
 
             bool last = rows_to_read == space_left;
-#ifdef DEBUG_IN_RANGE_READER
-            /// stream creator
-            LOG_TRACE(trace_log, "[startReadingChain] stream->read, "
-                           "result.columns = {}, result.numReadRows = {}, rows_to_read = {}.",
-                      result.columns.size(), result.numReadRows(), rows_to_read);
-#endif
+
             result.addRows(stream.read(result.columns, rows_to_read, !last));
             result.addGranule(rows_to_read);
             space_left = (rows_to_read > space_left ? 0 : space_left - rows_to_read);
@@ -844,9 +822,6 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
 
 Columns MergeTreeRangeReader::continueReadingChain(ReadResult & result, size_t & num_rows)
 {
-#ifdef DEBUG_IN_RANGE_READER
-    LOG_TRACE(trace_log, "[continueReadingChain].");
-#endif
     Columns columns;
     num_rows = 0;
 
