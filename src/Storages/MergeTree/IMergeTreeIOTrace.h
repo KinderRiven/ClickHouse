@@ -12,6 +12,7 @@ namespace DB {
 #define DEBUG_IN_RANGE_READER_STREAM
 #define DEBUG_IN_RANGE_READER_DELAYED_STREAM
 #define DEBUG_IN_READER_WIDE
+#define DEBUG_IN_READER_STREAM
 
 class MergeTreeDataPartWide;
 

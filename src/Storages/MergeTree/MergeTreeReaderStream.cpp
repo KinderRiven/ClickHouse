@@ -4,6 +4,7 @@
 #include <base/getThreadId.h>
 #include <utility>
 
+#define LIGHT_DEBUG_IN_READER_STREAM
 
 namespace DB
 {
@@ -13,8 +14,6 @@ namespace ErrorCodes
     extern const int ARGUMENT_OUT_OF_BOUND;
     extern const int CANNOT_READ_ALL_DATA;
 }
-
-// #define DEBUG_IN_MERGE_TREE_STREAM
 
 MergeTreeReaderStream::MergeTreeReaderStream(
         DiskPtr disk_,
@@ -110,9 +109,6 @@ MergeTreeReaderStream::MergeTreeReaderStream(
 
 std::pair<size_t, size_t> MergeTreeReaderStream::getRightOffsetAndBytesRange(size_t left_mark, size_t right_mark)
 {
-#ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(trace_log, "[getRightOffsetAndBytesRange][start] with range [{},{}].", left_mark, right_mark);
-#endif
     /// NOTE: if we are reading the whole file, then right_mark == marks_count
     /// and we will use max_read_buffer_size for buffer size, thus avoiding the need to load marks.
 
@@ -145,20 +141,16 @@ std::pair<size_t, size_t> MergeTreeReaderStream::getRightOffsetAndBytesRange(siz
         right_offset = marks_loader.getMark(result_right_mark).offset_in_compressed_file;
         mark_range_bytes = right_offset - marks_loader.getMark(left_mark).offset_in_compressed_file;
     }
-
-#ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(trace_log, "[getRightOffsetAndBytesRange][end] with range [{},{}].", left_mark, right_mark);
-#endif
     return std::make_pair(right_offset, mark_range_bytes);
 }
 
 
 void MergeTreeReaderStream::seekToMark(size_t index)
 {
-#ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(trace_log, "[seekToMark][start] with index {}.", index);
+#ifdef LIGHT_DEBUG_IN_READER_STREAM
+    LOG_TRACE(trace_log, "[MergeTreeReaderStream::seekToMark][path_prefix:{}][mark:{}/{}]", path_prefix, index, marks_count);
 #endif
-    MarkInCompressedFile mark = marks_loader.getMark(index);
+    MarkInCompressedFile mark = marks_loader.getMark(index); /// get mark data
     try
     {
         if (cached_buffer)
@@ -177,17 +169,10 @@ void MergeTreeReaderStream::seekToMark(size_t index)
 
         throw;
     }
-#ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(trace_log, "[seekToMark][end] with index {}.", index);
-#endif
 }
-
 
 void MergeTreeReaderStream::seekToStart()
 {
-#ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(trace_log, "[seekToStart][start].");
-#endif
     try
     {
         if (cached_buffer)
@@ -203,17 +188,10 @@ void MergeTreeReaderStream::seekToStart()
 
         throw;
     }
-#ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(trace_log, "[seekToStart][end]");
-#endif
 }
-
 
 void MergeTreeReaderStream::adjustForRange(MarkRange range)
 {
-#ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(trace_log, "[adjustForRange][start] mark_range [{}, {}].", range.begin, range.end);
-#endif
     /**
      * Note: this method is called multiple times for the same range of marks -- each time we
      * read from stream, but we must update last_right_offset only if it is bigger than
@@ -243,9 +221,6 @@ void MergeTreeReaderStream::adjustForRange(MarkRange range)
         if (non_cached_buffer)
             non_cached_buffer->setReadUntilPosition(right_offset);
     }
-#ifdef DEBUG_IN_MERGE_TREE_STREAM
-    LOG_TRACE(trace_log, "[adjustForRange][end] mark_range [{}, {}].", range.begin, range.end);
-#endif
 }
 
 }
