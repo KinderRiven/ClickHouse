@@ -6,7 +6,6 @@
 #include <DataTypes/DataTypeNothing.h>
 #include <Storages/MergeTree/IMergeTreeIOTrace.h>
 
-
 #ifdef __SSE2__
 #include <emmintrin.h>
 #endif
@@ -88,6 +87,11 @@ size_t MergeTreeRangeReader::DelayedStream::readRows(Columns & columns, size_t n
         IMergeTreeIOTrace::instance().addMarkTrace(
                     "MergeTreeRangeReader::DelayedStream::readRows", merge_tree_reader->data_part, nullptr, current_mark);
 #endif
+
+#ifdef LIGHT_DEBUG_IN_RANGE_READER
+        LOG_TRACE(trace_log, "[MergeTreeRangeReader::DelayedStream::readRows][current_mark:{}][read rows:{}]",
+                      current_mark, num_rows);
+#endif
         size_t rows_read = merge_tree_reader->readRows(
             current_mark, current_task_last_mark, continue_reading, num_rows, columns);
         continue_reading = true;
@@ -159,7 +163,6 @@ size_t MergeTreeRangeReader::DelayedStream::finalize(Columns & columns)
     size_t rows_to_read = num_delayed_rows;
     current_offset += num_delayed_rows;
     num_delayed_rows = 0;
-
     return readRows(columns, rows_to_read);
 }
 
@@ -200,6 +203,10 @@ size_t MergeTreeRangeReader::Stream::readRows(Columns & columns, size_t num_rows
     IMergeTreeIOTrace::instance().addMarkTrace(
                     "MergeTreeRangeReader::Stream::readRows", merge_tree_reader->data_part, nullptr, current_mark);
 #endif
+#ifdef LIGHT_DEBUG_IN_RANGE_READER
+    LOG_TRACE(trace_log, "[MergeTreeRangeReader::Stream::read][current_mark:{}][read rows:{}]",
+                      current_mark, num_rows);
+#endif
     size_t rows_read = stream.read(columns, current_mark, offset_after_current_mark, num_rows);
 
     if (stream.isFinished())
@@ -231,7 +238,6 @@ size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bo
     if (num_rows)
     {
         checkNotFinished();
-
         size_t read_rows = readRows(columns, num_rows);
         offset_after_current_mark += num_rows;
 
@@ -787,8 +793,13 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
             {
                 result.addRows(stream.finalize(result.columns));
 #ifdef DEBUG_IN_RANGE_READER
+                /// mark ranges
                 IMergeTreeIOTrace::instance().addMarkTrace(
                     "MergeTreeRangeReader::startReadingChain::CreateStream", merge_tree_reader->data_part, nullptr, ranges.front());
+#endif
+#ifdef LIGHT_DEBUG_IN_RANGE_READER
+                LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][stream mark range({}, {})]",
+                          ranges.front().begin, ranges.front().end);
 #endif
                 stream = Stream(ranges.front().begin, ranges.front().end, current_task_last_mark, merge_tree_reader);
                 /// add range to result container
@@ -804,6 +815,10 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
                 current_space = stream.ceilRowsToCompleteGranules(space_left);
 
             auto rows_to_read = std::min(current_space, stream.numPendingRowsInCurrentGranule());
+#ifdef LIGHT_DEBUG_IN_RANGE_READER
+            LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][read rows in stream ({})]",
+                      rows_to_read);
+#endif
 
             bool last = rows_to_read == space_left;
 

@@ -4,8 +4,6 @@
 #include <base/getThreadId.h>
 #include <utility>
 
-#define LIGHT_DEBUG_IN_READER_STREAM
-
 namespace DB
 {
 
