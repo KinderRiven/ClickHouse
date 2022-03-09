@@ -220,13 +220,15 @@ static ReadBuffer * getStream(
     stream.adjustForRange(MarkRange(seek_to_start ? 0 : from_mark, current_task_last_mark));
 
     if (seek_to_start)
+    {
         stream.seekToStart();
+    }
     else if (seek_to_mark)
+    {
         stream.seekToMark(from_mark);
-
+    }
     return stream.data_buffer;
 }
-
 
 void MergeTreeReaderWide::prefetch(
     const NameAndTypePair & name_and_type,
@@ -253,7 +255,6 @@ void MergeTreeReaderWide::prefetch(
         }
     });
 }
-
 
 void MergeTreeReaderWide::readData(
     const NameAndTypePair & name_and_type, ColumnPtr & column,
