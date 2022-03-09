@@ -1,9 +1,9 @@
 #pragma once
-#include <Columns/IColumn.h>
 #include <base/logger_useful.h>
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/IDataType.h>
 #include <Storages/MergeTree/MarkRange.h>
+#include <Storages/MergeTree/MergeTreeRangeReader.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 
 namespace DB {
@@ -22,8 +22,6 @@ class MergeTreeDataPartWide;
 
 class IMergeTreeIOTrace {
 public:
-    using Columns = std::vector<ColumnPtr>;
-
     static IMergeTreeIOTrace & instance();
 
     void addMarkTrace(String trace, MergeTreeData::DataPartPtr data_part, Columns & column, size_t mark);
