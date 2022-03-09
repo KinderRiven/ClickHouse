@@ -227,8 +227,8 @@ size_t MergeTreeRangeReader::Stream::readRows(Columns & columns, size_t num_rows
                     "MergeTreeRangeReader::Stream::readRows", merge_tree_reader->data_part, nullptr, current_mark);
 #endif
 #ifdef LIGHT_DEBUG_IN_RANGE_READER
-    LOG_TRACE(trace_log, "[MergeTreeRangeReader::Stream::readRows][current_mark:{}][read rows:{}]",
-                      current_mark, num_rows);
+    LOG_TRACE(trace_log, "[MergeTreeRangeReader::Stream::readRows][current_mark:{}/{}][read rows:{}]",
+                      current_mark, last_mark, num_rows);
 #endif
     size_t rows_read = stream.read(columns, current_mark, offset_after_current_mark, num_rows);
 
@@ -801,8 +801,11 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
 MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t max_rows, MarkRanges & ranges)
 {
     ReadResult result;
+#ifdef LIGHT_DEBUG_IN_RANGE_READER
+    LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][DO][read_rows:{}][max_rows:{}]",
+              result.num_rows, max_rows);
+#endif
     result.columns.resize(merge_tree_reader->getColumns().size());
-
     size_t current_task_last_mark = getLastMark(ranges);
 
     /// Stream is lazy. result.num_added_rows is the number of rows added to block which is not equal to
@@ -849,11 +852,14 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
             space_left = (rows_to_read > space_left ? 0 : space_left - rows_to_read);
         }
     }
-
     result.addRows(stream.finalize(result.columns));
 
     /// Last granule may be incomplete.
     result.adjustLastGranule();
+#ifdef LIGHT_DEBUG_IN_RANGE_READER
+    LOG_TRACE(trace_log, "[MergeTreeRangeReader::startReadingChain][DONE][read_rows:{}][max_rows:{}]",
+              result.num_rows, max_rows);
+#endif
     return result;
 }
 
