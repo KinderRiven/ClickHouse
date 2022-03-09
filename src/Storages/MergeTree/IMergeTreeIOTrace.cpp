@@ -8,7 +8,7 @@ IMergeTreeIOTrace & IMergeTreeIOTrace::instance()
     return ret;
 }
 
-void IMergeTreeIOTrace::addMarkTrace(DataPartWidePtr data_part, ColumnPtr column, size_t from_mark)
+void IMergeTreeIOTrace::addMarkTrace(MergeTreeData::DataPartPtr data_part, ColumnPtr column, size_t from_mark)
 {
     String table_name = data_part->storage.getStorageID().table_name;
     String part_path = data_part->getFullRelativePath();
