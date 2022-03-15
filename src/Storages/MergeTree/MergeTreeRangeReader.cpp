@@ -850,7 +850,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
 // #endif
             result.addGranule(rows_to_read);
             space_left = (rows_to_read > space_left ? 0 : space_left - rows_to_read);
-            num_read_loop++;
+            // num_read_loop++;
         }
     }
 
