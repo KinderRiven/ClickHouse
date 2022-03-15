@@ -248,7 +248,7 @@ size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bo
         String relative_path = data_part->relative_path; // data_part path
         for (int i = 0; i < columns.size(); i++)
         {
-            String column_name = columns[i].getName();
+            String column_name = columns[i]->getName();
             LOG_TRACE(trace_log, "[MarkTrace][Path:{}][Column:{}][Mark:{}][Rows:{}]", relative_path, column_name, current_mark, num_rows);
         }
 #endif
