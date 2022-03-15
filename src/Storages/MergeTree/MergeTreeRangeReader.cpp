@@ -244,6 +244,7 @@ size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bo
     {
         checkNotFinished();
 #ifdef DEBUG_IN_RANGE_READER
+#if 0
         auto data_part = merge_tree_reader->data_part; // data_part pointer
         String relative_path = data_part->relative_path; // data_part path
         for (auto it = columns.begin(); it != columns.end(); it++)
@@ -251,6 +252,7 @@ size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bo
             String column_name = (*it)->getName();
             LOG_TRACE(trace_log, "[MarkTrace][Path:{}][Column:{}][Mark:{}][Rows:{}]", relative_path, column_name, current_mark, num_rows);
         }
+#endif
 #endif
         size_t read_rows = readRows(columns, num_rows);
         offset_after_current_mark += num_rows;
