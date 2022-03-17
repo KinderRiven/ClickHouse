@@ -6,28 +6,24 @@
 #include <base/types.h>
 
 #include <Disks/KV/SimpleKV.h>
-#include <IO/WriteBufferFromFileBase.h>
+#include <IO/ReadBufferFromFileBase.h>
 
 namespace DB
 {
 
-class WriteBufferFromKV : public WriteBufferFromFileBase
+class ReadBufferFromKV : public ReadBufferFromFileBase
 {
 public:
-    WriteBufferFromKV(SimpleKV * kv, String & key_, size_t value_length_);
+    ReadBufferFromKV(SimpleKV * kv, String & key_, size_t value_length_);
 
-    ~WriteBufferFromKV() = default;
+    ~ReadBufferFromKV() = default;
 
-    void sync() override;
-
-    void nextImpl() override;
-
-    void finalize() override;
+    bool nextImpl() override;
 
     std::string getFileName() const { return key; };
 
 private:
-    SimpleKV * kv_store;
+    SimpleKV * kv_store = nullptr;
 
     String key;
 

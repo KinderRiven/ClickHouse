@@ -31,13 +31,12 @@ void DiskKV::createFile(const String & path)
 
 std::unique_ptr<ReadBufferFromFileBase> DiskKV::readFile(const String & path, const ReadSettings &, std::optional<size_t> size) const
 {
-    return nullptr;
+    return std::make_unique<ReadBufferFromKV>(kv_impl, path, size);
 }
 
 std::unique_ptr<WriteBufferFromFileBase> DiskKV::writeFile(const String &path, size_t size, WriteMode)
 {
-    auto kv_buffer = std::make_unique<WriteBufferFromKV>(kv_impl, path, size);
-    return std::make_unique<WriteBufferFromFileDecorator(kv_buffer)>;
+    return std::make_unique<WriteBufferFromKV>(kv_impl, path, size);
 }
 
 void DiskKV::removeFile(const String & path)
