@@ -6,7 +6,6 @@ ReadBufferFromKV::ReadBufferFromKV(SimpleKV * kv_, String & key_) : ReadBufferFr
 {
 }
 
-
 bool ReadBufferFromKV::nextImpl()
 {
     /// TODO update value
