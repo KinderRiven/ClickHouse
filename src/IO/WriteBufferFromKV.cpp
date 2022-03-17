@@ -17,7 +17,7 @@ void WriteBufferFromKV::sync()
 void WriteBufferFromKV::nextImpl()
 {
     /// TODO update value
-    size_t sub_string_size = (size_t)(pos - working_buffer.begin());
+    size_t sub_string_size = (size_t)(pos - working_buffer.begin);
     value += String(working_buffer.begin(), sub_string_size);
 }
 
