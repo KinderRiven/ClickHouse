@@ -13,6 +13,7 @@ enum class DiskType
     HDFS,
     Encrypted,
     WebServer,
+    KV, /// DISKKV
 };
 
 inline String toString(DiskType disk_type)

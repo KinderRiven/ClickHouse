@@ -4,7 +4,7 @@ using namespace DB;
 
 DiskKV::DiskKV()
 {
-    kv_impl = make_shared<SimpleKV()>;
+    kv_impl = std::make_shared<SimpleKV()>;
 }
 
 bool DiskKV::exists(const String & path) const

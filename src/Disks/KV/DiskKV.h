@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Disks/DiskType.h"
 #include "Disks/IDisk.h"
 #include "SimpleKV.h"
 
@@ -92,7 +93,7 @@ public:
     void setLastModified(const String &, const Poco::Timestamp &) override { }
 
     /// unknow function
-    Poco::Timestamp getLastModified(const String &) override { }
+    Poco::Timestamp getLastModified(const String &) override { return Poco::Timestamp{}; }
 
     void setReadOnly(const String &) override { }
 
@@ -100,11 +101,11 @@ public:
 
     void truncateFile(const String &, size_t) override { }
 
-    DiskType getType() const override { }
+    DiskType getType() const override { return DiskType::KV; }
 
     bool isRemote() const override { return true; }
 
-    bool supportZeroCopyReplication() const override { return false }
+    bool supportZeroCopyReplication() const override { return false; }
 
     bool isReadOnly() const override { return false; }
 
