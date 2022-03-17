@@ -8,7 +8,7 @@ namespace DB
 class DiskKV : public IDisk
 {
 public:
-    DiskKV() = default; /// just for test
+    DiskKV(); /// just for test
 
     const String & getPath() const final override { return ""; }
 
