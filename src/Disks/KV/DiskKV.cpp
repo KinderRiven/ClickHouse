@@ -30,9 +30,9 @@ void DiskKV::createFile(const String & path)
     }
 }
 
-std::unique_ptr<ReadBufferFromFileBase> DiskKV::readFile(const String & path, const ReadSettings &, std::optional<size_t> size) const
+std::unique_ptr<ReadBufferFromFileBase> DiskKV::readFile(const String & path, const ReadSettings &, std::optional<size_t>) const
 {
-    return std::make_unique<ReadBufferFromKV>(kv_impl, path, size);
+    return std::make_unique<ReadBufferFromKV>(kv_impl, path);
 }
 
 std::unique_ptr<WriteBufferFromFileBase> DiskKV::writeFile(const String &path, size_t size, WriteMode)

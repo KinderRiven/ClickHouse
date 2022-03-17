@@ -24,10 +24,10 @@ public:
 
     void finalize() override;
 
-    std::string getFileName() const override { return key; };
+    std::string getFileName() const override { return key; }
 
 private:
-    SimpleKV * kv_store;
+    SimpleKV * kv_store = nullptr;
 
     String key;
 

@@ -14,7 +14,7 @@ namespace DB
 class ReadBufferFromKV : public ReadBufferFromFileBase
 {
 public:
-    ReadBufferFromKV(SimpleKV * kv, String & key_, size_t value_length_);
+    ReadBufferFromKV(SimpleKV * kv, String & key_);
 
     ~ReadBufferFromKV() = default;
 
@@ -33,7 +33,7 @@ private:
 
     String value;
 
-    size_t value_length;
+    size_t value_length = 0;
 
     bool finalized = false;
 };

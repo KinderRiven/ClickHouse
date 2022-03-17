@@ -2,8 +2,7 @@
 
 using namespace DB;
 
-ReadBufferFromKV::ReadBufferFromKV(SimpleKV * kv_, String & key_, size_t value_length_)
-    : ReadBufferFromFileBase(value_length_, nullptr, 0), kv_store(kv_), key(key_), value_length(value_length_)
+ReadBufferFromKV::ReadBufferFromKV(SimpleKV * kv_, String & key_) : ReadBufferFromFileBase(0, nullptr, 0), kv_store(kv_), key(key_)
 {
 }
 
@@ -11,6 +10,7 @@ ReadBufferFromKV::ReadBufferFromKV(SimpleKV * kv_, String & key_, size_t value_l
 bool ReadBufferFromKV::nextImpl()
 {
     /// TODO update value
+    /// std::string(working_buffer.begin(), pos)
     return false;
 }
 
