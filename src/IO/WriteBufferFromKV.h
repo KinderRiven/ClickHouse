@@ -15,7 +15,7 @@ namespace DB
 class WriteBufferFromKV : public BufferWithOwnMemory<WriteBuffer>
 {
 public:
-    WriteBufferFromKV(SimpleKV * kv, String & key_, size_t value_length_) : kv_store(kv), key(key_), value_length(value_length_) { }
+    WriteBufferFromKV(SimpleKV * kv, String & key_, size_t value_length_);
 
     void nextImpl() override;
 
