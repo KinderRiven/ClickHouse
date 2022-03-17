@@ -14,7 +14,7 @@ namespace DB
 class WriteBufferFromKV : public WriteBufferFromFileBase
 {
 public:
-    WriteBufferFromKV(SimpleKV * kv, String & key_, size_t value_length_);
+    WriteBufferFromKV(SimpleKV * kv, const String & key_, size_t value_length_);
 
     ~WriteBufferFromKV() = default;
 

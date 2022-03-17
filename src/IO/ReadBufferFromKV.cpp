@@ -2,7 +2,7 @@
 
 using namespace DB;
 
-ReadBufferFromKV::ReadBufferFromKV(SimpleKV * kv_, String & key_) : ReadBufferFromFileBase(0, nullptr, 0), kv_store(kv_), key(key_)
+ReadBufferFromKV::ReadBufferFromKV(SimpleKV * kv_, const String & key_) : ReadBufferFromFileBase(0, nullptr, 0), kv_store(kv_), key(key_)
 {
 }
 

@@ -14,7 +14,7 @@ namespace DB
 class ReadBufferFromKV : public ReadBufferFromFileBase
 {
 public:
-    ReadBufferFromKV(SimpleKV * kv, String & key_);
+    ReadBufferFromKV(SimpleKV * kv, const String & key_);
 
     ~ReadBufferFromKV() = default;
 

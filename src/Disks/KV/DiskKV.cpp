@@ -1,6 +1,6 @@
 #include "DiskKV.h"
-#include <IO/WriteBufferFromKV.h>
 #include <IO/ReadBufferFromKV.h>
+#include <IO/WriteBufferFromKV.h>
 
 using namespace DB;
 
@@ -35,7 +35,7 @@ std::unique_ptr<ReadBufferFromFileBase> DiskKV::readFile(const String & path, co
     return std::make_unique<ReadBufferFromKV>(kv_impl, path);
 }
 
-std::unique_ptr<WriteBufferFromFileBase> DiskKV::writeFile(const String &path, size_t size, WriteMode)
+std::unique_ptr<WriteBufferFromFileBase> DiskKV::writeFile(const String & path, size_t size, WriteMode)
 {
     return std::make_unique<WriteBufferFromKV>(kv_impl, path, size);
 }
