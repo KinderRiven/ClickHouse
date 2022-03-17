@@ -20,6 +20,10 @@ public:
 
     bool nextImpl() override;
 
+    off_t getPosition() override;
+
+    off_t seek(off_t off, int whence) override;
+
     std::string getFileName() const override { return key; };
 
 private:

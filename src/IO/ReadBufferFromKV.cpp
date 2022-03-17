@@ -13,3 +13,13 @@ bool ReadBufferFromKV::nextImpl()
     /// TODO update value
     return false;
 }
+
+off_t ReadBufferFromKV::getPosition()
+{
+    return 0;
+}
+
+off_t ReadBufferFromKV::seek(off_t, int)
+{
+    return 0;
+}
