@@ -11,7 +11,6 @@ bool ReadBufferFromKV::nextImpl()
     if (finalized)
         return false;
 
-    /// TODO update value
     /// std::string(working_buffer.begin(), pos)
     value = kv_store->get[key];
     finalized = true;
