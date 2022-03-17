@@ -131,6 +131,6 @@ public:
     void applyNewSettings(const Poco::Util::AbstractConfiguration &, ContextPtr, const String &, const DisksMap &) override { }
 
 private:
-    SimpleKV * kv_impl;
+    SimpleKV * kv_impl = nullptr;
 };
 };
