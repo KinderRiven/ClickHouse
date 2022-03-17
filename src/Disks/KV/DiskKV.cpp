@@ -34,7 +34,7 @@ DiskKV::readFile(const String & path, const ReadSettings & settings = ReadSettin
 }
 
 std::unique_ptr<WriteBufferFromFileBase>
-DiskKV::writeFile(const String & path, size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE, WriteMode mode = WriteMode::Rewrite) override
+DiskKV::writeFile(const String & path, size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE, WriteMode mode = WriteMode::Rewrite)
 {
     return nullptr;
 }
