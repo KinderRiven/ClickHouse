@@ -14,6 +14,7 @@ void WriteBufferFromKV::sync()
 
 /// |- next()
 ///    | --- nextImpl()
+/// |- pos = working_buffer.begin()
 void WriteBufferFromKV::nextImpl()
 {
     /// update put value
