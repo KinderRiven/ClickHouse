@@ -32,6 +32,8 @@ inline String toString(DiskType disk_type)
             return "encrypted";
         case DiskType::WebServer:
             return "web";
+        case DiskType::KV:
+            return "kv";
     }
     __builtin_unreachable();
 }
