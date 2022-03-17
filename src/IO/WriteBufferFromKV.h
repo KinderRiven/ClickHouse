@@ -24,7 +24,7 @@ public:
 
     void finalize() override;
 
-    std::string getFileName() const { return key; };
+    std::string getFileName() const override { return key; };
 
 private:
     SimpleKV * kv_store;
