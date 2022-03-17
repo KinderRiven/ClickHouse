@@ -4,7 +4,7 @@ using namespace DB;
 
 DiskKV::DiskKV()
 {
-    kv_impl = std::make_shared<SimpleKV()>;
+    kv_impl = new SimpleKV();
 }
 
 bool DiskKV::exists(const String & path) const
@@ -28,12 +28,12 @@ void DiskKV::createFile(const String & path)
     }
 }
 
-std::unique_ptr<ReadBufferFromFileBase> DiskKV::readFile(const String &, const ReadSettings &, std::optional<size_t> size) const
+std::unique_ptr<ReadBufferFromFileBase> DiskKV::readFile(const String &, const ReadSettings &, std::optional<size_t>) const
 {
     return nullptr;
 }
 
-std::unique_ptr<WriteBufferFromFileBase> DiskKV::writeFile(const String &, size_t, WriteMode mode)
+std::unique_ptr<WriteBufferFromFileBase> DiskKV::writeFile(const String &, size_t, WriteMode)
 {
     return nullptr;
 }
