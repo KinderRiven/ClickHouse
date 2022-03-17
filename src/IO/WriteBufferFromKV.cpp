@@ -16,8 +16,8 @@ void WriteBufferFromKV::sync()
 ///    | --- nextImpl()
 void WriteBufferFromKV::nextImpl()
 {
-    /// TODO update value
-    size_t sub_string_size = (size_t)(pos - working_buffer.begin());
+    /// update put value
+    size_t sub_string_size = static_cast<size_t>(pos - working_buffer.begin());
     value += String(working_buffer.begin(), sub_string_size);
 }
 
@@ -27,7 +27,6 @@ void WriteBufferFromKV::finalize()
         return;
 
     next();
-
     kv_store->put(key, value);
     finalized = true;
 }

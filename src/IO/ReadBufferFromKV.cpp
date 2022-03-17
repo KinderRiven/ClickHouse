@@ -8,9 +8,17 @@ ReadBufferFromKV::ReadBufferFromKV(SimpleKV * kv_, const String & key_) : ReadBu
 
 bool ReadBufferFromKV::nextImpl()
 {
+    if (finalized)
+        return false;
+
     /// TODO update value
     /// std::string(working_buffer.begin(), pos)
-    return false;
+    value = kv_store->get[key];
+    finalized = true;
+
+    /// set ReadBuffer
+    set(value.c_str(), value.size());
+    return true;
 }
 
 off_t ReadBufferFromKV::getPosition()
