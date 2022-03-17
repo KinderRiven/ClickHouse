@@ -13,7 +13,7 @@ bool SimpleKV::get(const String & key, String & value) const
     auto iter = kv_store.find(key);
     if (iter != kv_store.end())
     {
-        value = *iter;
+        value = iter->second;
         return true;
     }
     return false;
