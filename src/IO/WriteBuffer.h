@@ -69,7 +69,6 @@ public:
             next();
     }
 
-
     void write(const char * from, size_t n)
     {
         size_t bytes_copied = 0;
