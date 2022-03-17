@@ -20,7 +20,7 @@ public:
 
     bool nextImpl() override;
 
-    std::string getFileName() const { return key; };
+    std::string getFileName() const override { return key; };
 
 private:
     SimpleKV * kv_store = nullptr;
