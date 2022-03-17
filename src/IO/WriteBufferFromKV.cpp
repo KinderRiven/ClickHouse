@@ -14,6 +14,11 @@ void WriteBufferFromKV::nextImpl()
 
 void WriteBufferFromKV::finalize()
 {
+    if (finalized)
+        return;
+
     next();
-    /// TODO kv_impl->put()
+
+    kv_store->put(key, value);
+    finalized = true;
 }

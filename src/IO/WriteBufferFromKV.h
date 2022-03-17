@@ -29,6 +29,8 @@ private:
     String value;
 
     size_t value_length;
+
+    bool finalized = false;
 };
 
 };

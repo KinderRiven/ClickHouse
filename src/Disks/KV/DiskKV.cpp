@@ -34,7 +34,7 @@ std::unique_ptr<ReadBufferFromFileBase> DiskKV::readFile(const String & path, co
     return nullptr;
 }
 
-std::unique_ptr<WriteBufferFromFileBase> DiskKV::writeFile(const String &, size_t, WriteMode)
+std::unique_ptr<WriteBufferFromFileBase> DiskKV::writeFile(const String &path, size_t size, WriteMode)
 {
     auto kv_buffer = std::make_unique<WriteBufferFromKV>(kv_impl, path, size);
     return std::make_unique<WriteBufferFromFileDecorator(kv_buffer)>;
