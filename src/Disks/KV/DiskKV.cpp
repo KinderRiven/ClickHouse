@@ -1,5 +1,6 @@
 #include "DiskKV.h"
 #include <IO/WriteBufferFromKV.h>
+#include <IO/ReadBufferFromKV.h>
 
 using namespace DB;
 
