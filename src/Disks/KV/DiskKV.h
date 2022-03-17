@@ -25,46 +25,48 @@ public:
     bool exists(const String & path) const override;
 
     /// We treat a key-value pair as a file
-    bool isFile(const String & path) const override { return true; }
+    bool isFile(const String &) const override { return true; }
 
     /// Always return false
-    bool isDirectory(const String & path) const override { return false; }
+    bool isDirectory(const String &) const override { return false; }
 
     /// return kv_impl->get(path).size();
     size_t getFileSize(const String & path) const override;
 
     /// TODO
     /// empty function, throw error
-    void createDirectory(const String & path) override { }
+    void createDirectory(const String &) override { }
 
     /// TODO
     /// empty function, throw error
-    void createDirectories(const String & path) override { }
+    void createDirectories(const String &) override { }
 
     /// TODO
     /// empty function, throw error
-    void clearDirectory(const String & path) override { }
+    void clearDirectory(const String &) override { }
 
     /// TODO
     /// empty function, throw error
-    void moveDirectory(const String & from_path, const String & to_path) override { }
+    void moveDirectory(const String &, const String &) override { }
 
-    DiskDirectoryIteratorPtr iterateDirectory(const String & path) override { return nullptr; }
+    DiskDirectoryIteratorPtr iterateDirectory(const String &) override { return nullptr; }
 
     /// kv_impl->put(path, empty_value)
     void createFile(const String & path) override;
 
     /// TODO
     /// empty function, throw error
-    void moveFile(const String & from_path, const String & to_path) override { }
+    void moveFile(const String &, const String &) override { }
 
     /// TODO
     /// empty function, throw error
-    void replaceFile(const String & from_path, const String & to_path) override { }
+    void replaceFile(const String &, const String &) override { }
 
-    void copy(const String & from_path, const std::shared_ptr<IDisk> & to_disk, const String & to_path) override { }
+    /// TODO
+    void copy(const String &, const std::shared_ptr<IDisk> &, const String &) override { }
 
-    void listFiles(const String & path, std::vector<String> & file_names) override;
+    /// TODO
+    void listFiles(const String &, std::vector<String> &) override { }
 
     std::unique_ptr<ReadBufferFromFileBase>
     readFile(const String & path, const ReadSettings & settings = ReadSettings{}, std::optional<size_t> size = {}) const override;
@@ -76,27 +78,27 @@ public:
 
     void removeFileIfExists(const String & path) override;
 
-    void removeDirectory(const String & path) override { }
+    void removeDirectory(const String &) override { }
 
-    void removeRecursive(const String & path) override { }
+    void removeRecursive(const String &) override { }
 
-    void removeSharedFile(const String & path, bool) { removeFile(path); }
+    void removeSharedFile(const String & path, bool) override { removeFile(path); }
 
-    void removeSharedRecursive(const String & path, bool) { removeRecursive(path); }
+    void removeSharedRecursive(const String & path, bool) override { removeRecursive(path); }
 
-    void removeSharedFileIfExists(const String & path, bool) { removeFileIfExists(path); }
-
-    /// unknow function
-    void setLastModified(const String & path, const Poco::Timestamp & timestamp) override { }
+    void removeSharedFileIfExists(const String & path, bool) override { removeFileIfExists(path); }
 
     /// unknow function
-    Poco::Timestamp getLastModified(const String & path) override { }
+    void setLastModified(const String &, const Poco::Timestamp &) override { }
 
-    void setReadOnly(const String & path) override { }
+    /// unknow function
+    Poco::Timestamp getLastModified(const String &) override { }
 
-    void createHardLink(const String & src_path, const String & dst_path) override { }
+    void setReadOnly(const String &) override { }
 
-    void truncateFile(const String & path, size_t size) override { }
+    void createHardLink(const String &, const String &) override { }
+
+    void truncateFile(const String &, size_t) override { }
 
     DiskType getType() const override { }
 

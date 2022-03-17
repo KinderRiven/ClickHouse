@@ -28,18 +28,12 @@ void DiskKV::createFile(const String & path)
     }
 }
 
-void DiskKV::listFiles(const String & path, std::vector<String> & file_names)
-{
-}
-
-std::unique_ptr<ReadBufferFromFileBase>
-DiskKV::readFile(const String & path, const ReadSettings & settings = ReadSettings{}, std::optional<size_t> size = {}) const
+std::unique_ptr<ReadBufferFromFileBase> DiskKV::readFile(const String &, const ReadSettings &, std::optional<size_t> size) const
 {
     return nullptr;
 }
 
-std::unique_ptr<WriteBufferFromFileBase>
-DiskKV::writeFile(const String & path, size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE, WriteMode mode = WriteMode::Rewrite)
+std::unique_ptr<WriteBufferFromFileBase> DiskKV::writeFile(const String &, size_t, WriteMode mode)
 {
     return nullptr;
 }
