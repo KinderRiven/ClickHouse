@@ -16,7 +16,7 @@ bool ReadBufferFromKV::nextImpl()
     finalized = true;
 
     /// set ReadBuffer
-    set(value.c_str(), value.size(), 0);
+    set(static_cast<char *>(value.c_str()), value.size(), 0);
     return true;
 }
 
