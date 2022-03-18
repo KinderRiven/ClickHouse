@@ -1,18 +1,18 @@
 #include <Disks/IDiskRemote.h>
 
-#include "Disks/DiskFactory.h"
+#include <Disks/IO/ThreadPoolRemoteFSReader.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteBufferFromS3.h>
 #include <IO/WriteHelpers.h>
-#include <Common/createHardLink.h>
-#include <Common/quoteString.h>
 #include <base/logger_useful.h>
-#include <Common/checkStackSize.h>
 #include <boost/algorithm/string.hpp>
+#include <Common/checkStackSize.h>
+#include <Common/createHardLink.h>
 #include <Common/filesystemHelpers.h>
-#include <Disks/IO/ThreadPoolRemoteFSReader.h>
+#include <Common/quoteString.h>
+#include "Disks/DiskFactory.h"
 
 
 namespace DB
@@ -23,20 +23,15 @@ namespace ErrorCodes
     extern const int INCORRECT_DISK_INDEX;
     extern const int UNKNOWN_FORMAT;
     extern const int FILE_ALREADY_EXISTS;
-    extern const int PATH_ACCESS_DENIED;;
+    extern const int PATH_ACCESS_DENIED;
+    ;
     extern const int CANNOT_DELETE_DIRECTORY;
 }
 
-
 /// Load metadata by path or create empty if `create` flag is set.
 IDiskRemote::Metadata::Metadata(
-        const String & remote_fs_root_path_,
-        const String & disk_path_,
-        const String & metadata_file_path_,
-        bool create)
-    : RemoteMetadata(remote_fs_root_path_, metadata_file_path_)
-    , disk_path(disk_path_)
-    , total_size(0), ref_count(0)
+    const String & remote_fs_root_path_, const String & disk_path_, const String & metadata_file_path_, bool create)
+    : RemoteMetadata(remote_fs_root_path_, metadata_file_path_), disk_path(disk_path_), total_size(0), ref_count(0)
 {
     if (create)
         return;
@@ -52,7 +47,9 @@ IDiskRemote::Metadata::Metadata(
             throw Exception(
                 ErrorCodes::UNKNOWN_FORMAT,
                 "Unknown metadata file version. Path: {}. Version: {}. Maximum expected version: {}",
-                disk_path + metadata_file_path, toString(version), toString(VERSION_READ_ONLY_FLAG));
+                disk_path + metadata_file_path,
+                toString(version),
+                toString(VERSION_READ_ONLY_FLAG));
 
         assertChar('\n', buf);
 
@@ -73,9 +70,12 @@ IDiskRemote::Metadata::Metadata(
             if (version == VERSION_ABSOLUTE_PATHS)
             {
                 if (!remote_fs_object_path.starts_with(remote_fs_root_path))
-                    throw Exception(ErrorCodes::UNKNOWN_FORMAT,
+                    throw Exception(
+                        ErrorCodes::UNKNOWN_FORMAT,
                         "Path in metadata does not correspond to root path. Path: {}, root path: {}, disk path: {}",
-                        remote_fs_object_path, remote_fs_root_path, disk_path_);
+                        remote_fs_object_path,
+                        remote_fs_root_path,
+                        disk_path_);
 
                 remote_fs_object_path = remote_fs_object_path.substr(remote_fs_root_path.size());
             }
@@ -108,6 +108,11 @@ void IDiskRemote::Metadata::addObject(const String & path, size_t size)
 }
 
 /// Fsync metadata file if 'sync' flag is set.
+/// 2                                               [VERSION_RELATIVE_PATHS]
+/// 1       2376                                    [remote_fs_objects.size] [total_size]
+/// 2376    unrvsmduhjournyrxkkaccudgjtczfzw        [object_size]   [object_name]
+/// 0                                               [ref_count]
+/// 0                                               [read_only]
 void IDiskRemote::Metadata::save(bool sync)
 {
     WriteBufferFromFile buf(disk_path + metadata_file_path, 1024);
@@ -206,9 +211,11 @@ void IDiskRemote::removeMeta(const String & path, RemoteFSPathKeeperPtr fs_paths
         /// If it's impossible to read meta - just remove it from FS.
         if (e.code() == ErrorCodes::UNKNOWN_FORMAT)
         {
-            LOG_WARNING(log,
+            LOG_WARNING(
+                log,
                 "Metadata file {} can't be read by reason: {}. Removing it forcibly.",
-                backQuote(path), e.nested() ? e.nested()->message() : e.message());
+                backQuote(path),
+                e.nested() ? e.nested()->message() : e.message());
             fs::remove(file);
         }
         else
@@ -479,8 +486,8 @@ bool IDiskRemote::tryReserve(UInt64 bytes)
     UInt64 unreserved_space = available_space - std::min(available_space, reserved_bytes);
     if (unreserved_space >= bytes)
     {
-        LOG_DEBUG(log, "Reserving {} on disk {}, having unreserved {}.",
-            ReadableSize(bytes), backQuote(name), ReadableSize(unreserved_space));
+        LOG_DEBUG(
+            log, "Reserving {} on disk {}, having unreserved {}.", ReadableSize(bytes), backQuote(name), ReadableSize(unreserved_space));
         ++reservation_count;
         reserved_bytes += bytes;
         return true;
