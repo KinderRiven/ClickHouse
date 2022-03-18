@@ -4,19 +4,19 @@
 
 #if USE_AWS_S3
 
-#include <atomic>
-#include <optional>
-#include <base/logger_useful.h>
-#include "Disks/DiskFactory.h"
-#include "Disks/Executor.h"
+#    include <atomic>
+#    include <optional>
+#    include <base/logger_useful.h>
+#    include "Disks/DiskFactory.h"
+#    include "Disks/Executor.h"
 
-#include <aws/s3/S3Client.h>
-#include <aws/s3/model/HeadObjectResult.h>
-#include <aws/s3/model/ListObjectsV2Result.h>
+#    include <aws/s3/S3Client.h>
+#    include <aws/s3/model/HeadObjectResult.h>
+#    include <aws/s3/model/ListObjectsV2Result.h>
 
-#include <Poco/DirectoryIterator.h>
-#include <re2/re2.h>
-#include <Disks/IDiskRemote.h>
+#    include <Disks/IDiskRemote.h>
+#    include <re2/re2.h>
+#    include <Poco/DirectoryIterator.h>
 
 
 namespace DB
@@ -73,15 +73,10 @@ public:
         SettingsPtr settings_,
         GetDiskSettings settings_getter_);
 
-    std::unique_ptr<ReadBufferFromFileBase> readFile(
-        const String & path,
-        const ReadSettings & settings,
-        std::optional<size_t> size) const override;
+    std::unique_ptr<ReadBufferFromFileBase>
+    readFile(const String & path, const ReadSettings & settings, std::optional<size_t> size) const override;
 
-    std::unique_ptr<WriteBufferFromFileBase> writeFile(
-        const String & path,
-        size_t buf_size,
-        WriteMode mode) override;
+    std::unique_ptr<WriteBufferFromFileBase> writeFile(const String & path, size_t buf_size, WriteMode mode) override;
 
     void removeFromRemoteFS(RemoteFSPathKeeperPtr keeper) override;
 
@@ -128,14 +123,29 @@ private:
     void migrateToRestorableSchema();
 
     Aws::S3::Model::HeadObjectResult headObject(const String & source_bucket, const String & key) const;
-    void listObjects(const String & source_bucket, const String & source_path, std::function<bool(const Aws::S3::Model::ListObjectsV2Result &)> callback) const;
-    void copyObject(const String & src_bucket, const String & src_key, const String & dst_bucket, const String & dst_key,
+    void listObjects(
+        const String & source_bucket,
+        const String & source_path,
+        std::function<bool(const Aws::S3::Model::ListObjectsV2Result &)> callback) const;
+    void copyObject(
+        const String & src_bucket,
+        const String & src_key,
+        const String & dst_bucket,
+        const String & dst_key,
         std::optional<Aws::S3::Model::HeadObjectResult> head = std::nullopt) const;
 
-    void copyObjectImpl(const String & src_bucket, const String & src_key, const String & dst_bucket, const String & dst_key,
+    void copyObjectImpl(
+        const String & src_bucket,
+        const String & src_key,
+        const String & dst_bucket,
+        const String & dst_key,
         std::optional<Aws::S3::Model::HeadObjectResult> head = std::nullopt,
         std::optional<std::reference_wrapper<const ObjectMetadata>> metadata = std::nullopt) const;
-    void copyObjectMultipartImpl(const String & src_bucket, const String & src_key, const String & dst_bucket, const String & dst_key,
+    void copyObjectMultipartImpl(
+        const String & src_bucket,
+        const String & src_key,
+        const String & dst_bucket,
+        const String & dst_key,
         std::optional<Aws::S3::Model::HeadObjectResult> head = std::nullopt,
         std::optional<std::reference_wrapper<const ObjectMetadata>> metadata = std::nullopt) const;
 
@@ -168,14 +178,14 @@ private:
     inline static const String RESTORE_FILE_NAME = "restore";
 
     /// Key has format: ../../r{revision}-{operation}
-    const re2::RE2 key_regexp {".*/r(\\d+)-(\\w+).*"};
+    const re2::RE2 key_regexp{".*/r(\\d+)-(\\w+).*"};
 
     /// Object contains information about schema version.
     inline static const String SCHEMA_VERSION_OBJECT = ".SCHEMA_VERSION";
     /// Version with possibility to backup-restore metadata.
     static constexpr int RESTORABLE_SCHEMA_VERSION = 1;
     /// Directories with data.
-    const std::vector<String> data_roots {"data", "store"};
+    const std::vector<String> data_roots{"data", "store"};
 
     ContextPtr context;
 };
