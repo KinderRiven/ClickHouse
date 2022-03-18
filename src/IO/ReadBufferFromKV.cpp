@@ -6,17 +6,31 @@ ReadBufferFromKV::ReadBufferFromKV(SimpleKV * kv_, const String & key_) : ReadBu
 {
 }
 
+ ReadBufferFromKV::~ReadBufferFromKV()
+ {
+     if (copy_buf != nullptr)
+        delete copy_buf;
+ }
+
 bool ReadBufferFromKV::nextImpl()
 {
     if (finalized)
         return false;
 
-    /// std::string(working_buffer.begin(), pos)
-    value = kv_store->get[key];
+    /// read mark cache from key-value store
+    bool hit = kv_store->get(key, value);
+
+    if (!hit)
+        return false;
+
     finalized = true;
 
-    /// set ReadBuffer
-    set(static_cast<char *>(value.c_str()), value.size(), 0);
+    if (copy_buf != nullptr)
+        delete copy_buf;
+
+    copy_buf = new char[value.size()];
+    memcpy(copy_buf, value.c_str(), value.size());
+    set(copy_buf, value.size());
     return true;
 }
 

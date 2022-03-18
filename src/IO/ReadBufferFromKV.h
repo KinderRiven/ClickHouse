@@ -16,7 +16,7 @@ class ReadBufferFromKV : public ReadBufferFromFileBase
 public:
     ReadBufferFromKV(SimpleKV * kv, const String & key_);
 
-    ~ReadBufferFromKV() = default;
+    ~ReadBufferFromKV();
 
     bool nextImpl() override;
 
@@ -28,6 +28,8 @@ public:
 
 private:
     SimpleKV * kv_store = nullptr;
+
+    char *copy_buf = nullptr;
 
     String key;
 
