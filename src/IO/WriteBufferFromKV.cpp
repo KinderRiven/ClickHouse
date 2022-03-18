@@ -1,15 +1,31 @@
 #include <IO/WriteBufferFromKV.h>
 
-using namespace DB;
-
-WriteBufferFromKV::WriteBufferFromKV(SimpleKV * kv_, const String & key_, size_t value_length_)
-    : WriteBufferFromFileBase(value_length_, nullptr, 0), kv_store(kv_), key(key_), value_length(value_length_)
+namespace DB
 {
+
+WriteBufferFromKV::WriteBufferFromKV(std::unique_ptr<WriteBufferFromKVBase> impl_)
+    : WriteBufferFromFileBase(0, nullptr, 0), impl(std::move(impl_))
+{
+    swap(*impl);
 }
 
 void WriteBufferFromKV::sync()
 {
+    impl->sync();
+}
+
+std::string WriteBufferFromKV::getFileName() const
+{
+    return impl->getKeyString();
+}
+
+void WriteBufferFromKV::finalize()
+{
+    if (finalized)
+        return;
     next();
+    impl->finalize();
+    finalized = true;
 }
 
 /// |- next()
@@ -17,17 +33,10 @@ void WriteBufferFromKV::sync()
 /// |- pos = working_buffer.begin()
 void WriteBufferFromKV::nextImpl()
 {
-    /// update put value
-    size_t sub_string_size = static_cast<size_t>(pos - working_buffer.begin());
-    value += String(working_buffer.begin(), sub_string_size);
+    swap(*impl);
+    impl->next();
+    swap(*impl);
 }
 
-void WriteBufferFromKV::finalize()
-{
-    if (finalized)
-        return;
 
-    next();
-    kv_store->put(key, value);
-    finalized = true;
-}
+};

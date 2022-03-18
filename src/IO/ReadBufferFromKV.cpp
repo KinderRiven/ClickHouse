@@ -1,37 +1,23 @@
 #include <IO/ReadBufferFromKV.h>
 
-using namespace DB;
+namespace DB
+{
 
-ReadBufferFromKV::ReadBufferFromKV(SimpleKV * kv_, const String & key_) : ReadBufferFromFileBase(0, nullptr, 0), kv_store(kv_), key(key_)
+ReadBufferFromKV::ReadBufferFromKV(std::unique_ptr<ReadBufferFromKVBase> impl_) : ReadBufferFromFileBase(), kv_impl(std::move(impl_))
+{
+    swap(*kv_impl);
+}
+
+ReadBufferFromKV::~ReadBufferFromKV()
 {
 }
 
- ReadBufferFromKV::~ReadBufferFromKV()
- {
-     if (copy_buf != nullptr)
-        delete copy_buf;
- }
-
 bool ReadBufferFromKV::nextImpl()
 {
-    if (finalized)
-        return false;
-
-    /// read mark cache from key-value store
-    bool hit = kv_store->get(key, value);
-
-    if (!hit)
-        return false;
-
-    finalized = true;
-
-    if (copy_buf != nullptr)
-        delete copy_buf;
-
-    copy_buf = new char[value.size()];
-    memcpy(copy_buf, value.c_str(), value.size());
-    set(copy_buf, value.size());
-    return true;
+    swap(*kv_impl);
+    auto result = kv_impl->next();
+    swap(*kv_impl);
+    return result;
 }
 
 off_t ReadBufferFromKV::getPosition()
@@ -43,3 +29,5 @@ off_t ReadBufferFromKV::seek(off_t, int)
 {
     return 0;
 }
+
+};

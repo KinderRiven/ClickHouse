@@ -5,8 +5,10 @@
 #include <base/logger_useful.h>
 #include <base/types.h>
 
-#include <Disks/KV/SimpleKV.h>
+#include <IO/KV/KVBase.h>
 #include <IO/ReadBufferFromFileBase.h>
+#include <IO/ReadBufferFromKVBase.h>
+
 
 namespace DB
 {
@@ -14,7 +16,7 @@ namespace DB
 class ReadBufferFromKV : public ReadBufferFromFileBase
 {
 public:
-    ReadBufferFromKV(SimpleKV * kv, const String & key_);
+    ReadBufferFromKV(std::unique_ptr<ReadBufferFromKVBase> impl);
 
     ~ReadBufferFromKV();
 
@@ -24,20 +26,10 @@ public:
 
     off_t seek(off_t off, int whence) override;
 
-    std::string getFileName() const override { return key; };
+    std::string getFileName() const override { return kv_impl->getKeyString(); }
 
 private:
-    SimpleKV * kv_store = nullptr;
-
-    char *copy_buf = nullptr;
-
-    String key;
-
-    String value;
-
-    size_t value_length = 0;
-
-    bool finalized = false;
+    std::unique_ptr<ReadBufferFromKVBase> kv_impl = nullptr;
 };
 
 };

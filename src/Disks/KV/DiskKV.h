@@ -2,14 +2,15 @@
 
 #include "Disks/DiskType.h"
 #include "Disks/IDisk.h"
-#include "SimpleKV.h"
+#include <IO/KV/KVBase.h>
+#include <IO/KV/SimpleKV.h>
 
 namespace DB
 {
 class DiskKV : public IDisk
 {
 public:
-    DiskKV(); /// just for test
+    DiskKV(std::shared_ptr<KVBase> kv); /// just for test
 
     const String & getPath() const final override { return ""; }
 
@@ -132,6 +133,6 @@ public:
     void applyNewSettings(const Poco::Util::AbstractConfiguration &, ContextPtr, const String &, const DisksMap &) override { }
 
 private:
-    SimpleKV * kv_impl = nullptr;
+    std::shared_ptr<KVBase> kv_impl = nullptr;
 };
 };

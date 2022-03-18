@@ -1,45 +1,45 @@
 #include "DiskS3.h"
 
 #if USE_AWS_S3
-#include "Disks/DiskFactory.h"
+#    include "Disks/DiskFactory.h"
 
-#include <bitset>
-#include <random>
-#include <utility>
+#    include <bitset>
+#    include <random>
+#    include <utility>
 
-#include <boost/algorithm/string.hpp>
+#    include <boost/algorithm/string.hpp>
 
-#include <base/unit.h>
-#include <base/FnTraits.h>
+#    include <base/FnTraits.h>
+#    include <base/unit.h>
 
-#include <Common/checkStackSize.h>
-#include <Common/createHardLink.h>
-#include <Common/quoteString.h>
-#include <Common/thread_local_rng.h>
+#    include <Common/checkStackSize.h>
+#    include <Common/createHardLink.h>
+#    include <Common/quoteString.h>
+#    include <Common/thread_local_rng.h>
 
-#include <Interpreters/Context.h>
-#include <IO/ReadBufferFromS3.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/ReadHelpers.h>
-#include <IO/SeekAvoidingReadBuffer.h>
-#include <IO/WriteBufferFromS3.h>
-#include <IO/WriteHelpers.h>
+#    include <IO/ReadBufferFromS3.h>
+#    include <IO/ReadBufferFromString.h>
+#    include <IO/ReadHelpers.h>
+#    include <IO/SeekAvoidingReadBuffer.h>
+#    include <IO/WriteBufferFromS3.h>
+#    include <IO/WriteHelpers.h>
+#    include <Interpreters/Context.h>
 
-#include <Disks/IO/ReadBufferFromRemoteFSGather.h>
-#include <Disks/IO/AsynchronousReadIndirectBufferFromRemoteFS.h>
-#include <Disks/IO/ReadIndirectBufferFromRemoteFS.h>
-#include <Disks/IO/WriteIndirectBufferFromRemoteFS.h>
-#include <Disks/IO/ThreadPoolRemoteFSReader.h>
+#    include <Disks/IO/AsynchronousReadIndirectBufferFromRemoteFS.h>
+#    include <Disks/IO/ReadBufferFromRemoteFSGather.h>
+#    include <Disks/IO/ReadIndirectBufferFromRemoteFS.h>
+#    include <Disks/IO/ThreadPoolRemoteFSReader.h>
+#    include <Disks/IO/WriteIndirectBufferFromRemoteFS.h>
 
-#include <aws/s3/model/CopyObjectRequest.h>
-#include <aws/s3/model/DeleteObjectsRequest.h>
-#include <aws/s3/model/GetObjectRequest.h>
-#include <aws/s3/model/ListObjectsV2Request.h>
-#include <aws/s3/model/HeadObjectRequest.h>
-#include <aws/s3/model/CreateMultipartUploadRequest.h>
-#include <aws/s3/model/CompleteMultipartUploadRequest.h>
-#include <aws/s3/model/UploadPartCopyRequest.h>
-#include <aws/s3/model/AbortMultipartUploadRequest.h>
+#    include <aws/s3/model/AbortMultipartUploadRequest.h>
+#    include <aws/s3/model/CompleteMultipartUploadRequest.h>
+#    include <aws/s3/model/CopyObjectRequest.h>
+#    include <aws/s3/model/CreateMultipartUploadRequest.h>
+#    include <aws/s3/model/DeleteObjectsRequest.h>
+#    include <aws/s3/model/GetObjectRequest.h>
+#    include <aws/s3/model/HeadObjectRequest.h>
+#    include <aws/s3/model/ListObjectsV2Request.h>
+#    include <aws/s3/model/UploadPartCopyRequest.h>
 
 
 namespace DB
@@ -62,7 +62,7 @@ public:
     using Chunk = Aws::Vector<Aws::S3::Model::ObjectIdentifier>;
     using Chunks = std::list<Chunk>;
 
-    explicit S3PathKeeper(size_t chunk_limit_) : RemoteFSPathKeeper(chunk_limit_) {}
+    explicit S3PathKeeper(size_t chunk_limit_) : RemoteFSPathKeeper(chunk_limit_) { }
 
     void addPath(const String & path) override
     {
@@ -182,8 +182,7 @@ void DiskS3::removeFromRemoteFS(RemoteFSPathKeeperPtr fs_paths_keeper)
     auto * s3_paths_keeper = dynamic_cast<S3PathKeeper *>(fs_paths_keeper.get());
 
     if (s3_paths_keeper)
-        s3_paths_keeper->removePaths([&](S3PathKeeper::Chunk && chunk)
-        {
+        s3_paths_keeper->removePaths([&](S3PathKeeper::Chunk && chunk) {
             String keys = S3PathKeeper::getChunkKeys(chunk);
             LOG_TRACE(log, "Remove AWS keys {}", keys);
             Aws::S3::Model::Delete delkeys;
@@ -193,7 +192,7 @@ void DiskS3::removeFromRemoteFS(RemoteFSPathKeeperPtr fs_paths_keeper)
             request.SetDelete(delkeys);
             auto outcome = settings->client->DeleteObjects(request);
             // Do not throw here, continue deleting other chunks
-            logIfError(outcome, [&](){return "Can't remove AWS keys: " + keys;});
+            logIfError(outcome, [&]() { return "Can't remove AWS keys: " + keys; });
         });
 }
 
@@ -212,30 +211,26 @@ void DiskS3::moveFile(const String & from_path, const String & to_path, bool sen
     if (send_metadata)
     {
         auto revision = ++revision_counter;
-        const ObjectMetadata object_metadata {
-            {"from_path", from_path},
-            {"to_path", to_path}
-        };
+        const ObjectMetadata object_metadata{{"from_path", from_path}, {"to_path", to_path}};
         createFileOperationObject("rename", revision, object_metadata);
     }
 
     fs::rename(fs::path(metadata_path) / from_path, fs::path(metadata_path) / to_path);
 }
 
-std::unique_ptr<ReadBufferFromFileBase> DiskS3::readFile(const String & path, const ReadSettings & read_settings, std::optional<size_t>) const
+std::unique_ptr<ReadBufferFromFileBase>
+DiskS3::readFile(const String & path, const ReadSettings & read_settings, std::optional<size_t>) const
 {
     auto settings = current_settings.get();
     auto metadata = readMeta(path);
 
-    LOG_TRACE(log, "Read from file by path: {}. Existing S3 objects: {}",
-        backQuote(metadata_path + path), metadata.remote_fs_objects.size());
+    LOG_TRACE(
+        log, "Read from file by path: {}. Existing S3 objects: {}", backQuote(metadata_path + path), metadata.remote_fs_objects.size());
 
     bool threadpool_read = read_settings.remote_fs_method == RemoteFSReadMethod::threadpool;
 
     auto s3_impl = std::make_unique<ReadBufferFromS3Gather>(
-        path,
-        settings->client, bucket, metadata,
-        settings->s3_max_single_read_retries, read_settings, threadpool_read);
+        path, settings->client, bucket, metadata, settings->s3_max_single_read_retries, read_settings, threadpool_read);
 
     if (threadpool_read)
     {
@@ -261,14 +256,16 @@ std::unique_ptr<WriteBufferFromFileBase> DiskS3::writeFile(const String & path, 
     if (settings->send_metadata)
     {
         auto revision = ++revision_counter;
-        object_metadata = {
-            {"path", path}
-        };
+        object_metadata = {{"path", path}};
         s3_path = "r" + revisionToString(revision) + "-file-" + s3_path;
     }
 
-    LOG_TRACE(log, "{} to file by path: {}. S3 path: {}",
-              mode == WriteMode::Rewrite ? "Write" : "Append", backQuote(metadata_path + path), remote_fs_root_path + s3_path);
+    LOG_TRACE(
+        log,
+        "{} to file by path: {}. S3 path: {}",
+        mode == WriteMode::Rewrite ? "Write" : "Append",
+        backQuote(metadata_path + path),
+        remote_fs_root_path + s3_path);
 
     auto s3_buffer = std::make_unique<WriteBufferFromS3>(
         settings->client,
@@ -294,10 +291,7 @@ void DiskS3::createHardLink(const String & src_path, const String & dst_path, bo
     if (send_metadata && !dst_path.starts_with("shadow/"))
     {
         auto revision = ++revision_counter;
-        const ObjectMetadata object_metadata {
-            {"src_path", src_path},
-            {"dst_path", dst_path}
-        };
+        const ObjectMetadata object_metadata{{"src_path", src_path}, {"dst_path", dst_path}};
         createFileOperationObject("hardlink", revision, object_metadata);
     }
 
@@ -427,9 +421,7 @@ void DiskS3::migrateFileToRestorableSchema(const String & path)
 
     for (const auto & [key, _] : meta.remote_fs_objects)
     {
-        ObjectMetadata metadata {
-            {"path", path}
-        };
+        ObjectMetadata metadata{{"path", path}};
         updateObjectMetadata(remote_fs_root_path + key, metadata);
     }
 }
@@ -451,11 +443,10 @@ void DiskS3::migrateToRestorableSchemaRecursive(const String & path, Futures & r
     /// The whole directory can be migrated asynchronously.
     if (dir_contains_only_files)
     {
-        auto result = getExecutor().execute([this, path]
-             {
-                 for (auto it = iterateDirectory(path); it->isValid(); it->next())
-                     migrateFileToRestorableSchema(it->path());
-             });
+        auto result = getExecutor().execute([this, path] {
+            for (auto it = iterateDirectory(path); it->isValid(); it->next())
+                migrateFileToRestorableSchema(it->path());
+        });
 
         results.push_back(std::move(result));
     }
@@ -465,10 +456,7 @@ void DiskS3::migrateToRestorableSchemaRecursive(const String & path, Futures & r
             if (!isDirectory(it->path()))
             {
                 auto source_path = it->path();
-                auto result = getExecutor().execute([this, source_path]
-                    {
-                        migrateFileToRestorableSchema(source_path);
-                    });
+                auto result = getExecutor().execute([this, source_path] { migrateFileToRestorableSchema(source_path); });
 
                 results.push_back(std::move(result));
             }
@@ -551,7 +539,10 @@ Aws::S3::Model::HeadObjectResult DiskS3::headObject(const String & source_bucket
     return outcome.GetResultWithOwnership();
 }
 
-void DiskS3::listObjects(const String & source_bucket, const String & source_path, std::function<bool(const Aws::S3::Model::ListObjectsV2Result &)> callback) const
+void DiskS3::listObjects(
+    const String & source_bucket,
+    const String & source_path,
+    std::function<bool(const Aws::S3::Model::ListObjectsV2Result &)> callback) const
 {
     auto settings = current_settings.get();
     Aws::S3::Model::ListObjectsV2Request request;
@@ -574,7 +565,11 @@ void DiskS3::listObjects(const String & source_bucket, const String & source_pat
     } while (outcome.GetResult().GetIsTruncated());
 }
 
-void DiskS3::copyObject(const String & src_bucket, const String & src_key, const String & dst_bucket, const String & dst_key,
+void DiskS3::copyObject(
+    const String & src_bucket,
+    const String & src_key,
+    const String & dst_bucket,
+    const String & dst_key,
     std::optional<Aws::S3::Model::HeadObjectResult> head) const
 {
     if (head && (head->GetContentLength() >= static_cast<Int64>(5_GiB)))
@@ -583,7 +578,11 @@ void DiskS3::copyObject(const String & src_bucket, const String & src_key, const
         copyObjectImpl(src_bucket, src_key, dst_bucket, dst_key);
 }
 
-void DiskS3::copyObjectImpl(const String & src_bucket, const String & src_key, const String & dst_bucket, const String & dst_key,
+void DiskS3::copyObjectImpl(
+    const String & src_bucket,
+    const String & src_key,
+    const String & dst_bucket,
+    const String & dst_key,
     std::optional<Aws::S3::Model::HeadObjectResult> head,
     std::optional<std::reference_wrapper<const ObjectMetadata>> metadata) const
 {
@@ -609,12 +608,22 @@ void DiskS3::copyObjectImpl(const String & src_bucket, const String & src_key, c
     throwIfError(outcome);
 }
 
-void DiskS3::copyObjectMultipartImpl(const String & src_bucket, const String & src_key, const String & dst_bucket, const String & dst_key,
+void DiskS3::copyObjectMultipartImpl(
+    const String & src_bucket,
+    const String & src_key,
+    const String & dst_bucket,
+    const String & dst_key,
     std::optional<Aws::S3::Model::HeadObjectResult> head,
     std::optional<std::reference_wrapper<const ObjectMetadata>> metadata) const
 {
-    LOG_TRACE(log, "Multipart copy upload has created. Src Bucket: {}, Src Key: {}, Dst Bucket: {}, Dst Key: {}, Metadata: {}",
-        src_bucket, src_key, dst_bucket, dst_key, metadata ? "REPLACE" : "NOT_SET");
+    LOG_TRACE(
+        log,
+        "Multipart copy upload has created. Src Bucket: {}, Src Key: {}, Dst Bucket: {}, Dst Key: {}, Metadata: {}",
+        src_bucket,
+        src_key,
+        dst_bucket,
+        dst_key,
+        metadata ? "REPLACE" : "NOT_SET");
 
     auto settings = current_settings.get();
 
@@ -687,8 +696,16 @@ void DiskS3::copyObjectMultipartImpl(const String & src_bucket, const String & s
 
         throwIfError(outcome);
 
-        LOG_TRACE(log, "Multipart copy upload has completed. Src Bucket: {}, Src Key: {}, Dst Bucket: {}, Dst Key: {}, "
-            "Upload_id: {}, Parts: {}", src_bucket, src_key, dst_bucket, dst_key, multipart_upload_id, part_tags.size());
+        LOG_TRACE(
+            log,
+            "Multipart copy upload has completed. Src Bucket: {}, Src Key: {}, Dst Bucket: {}, Dst Key: {}, "
+            "Upload_id: {}, Parts: {}",
+            src_bucket,
+            src_key,
+            dst_bucket,
+            dst_key,
+            multipart_upload_id,
+            part_tags.size());
     }
 }
 
@@ -731,7 +748,7 @@ void DiskS3::readRestoreInformation(DiskS3::RestoreInformation & restore_informa
 
         for (const auto & [key, value] : properties)
         {
-            ReadBufferFromString value_buffer (value);
+            ReadBufferFromString value_buffer(value);
 
             if (key == "revision")
                 readIntText(restore_information.revision, value_buffer);
@@ -778,11 +795,18 @@ void DiskS3::restore()
 
             /// This case complicates S3 cleanup in case of unsuccessful restore.
             if (information.source_path != remote_fs_root_path && remote_fs_root_path.starts_with(information.source_path))
-                throw Exception("Restoring to the same bucket is allowed only if source path is not a sub-path of configured path in S3 disk", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(
+                    "Restoring to the same bucket is allowed only if source path is not a sub-path of configured path in S3 disk",
+                    ErrorCodes::BAD_ARGUMENTS);
         }
 
-        LOG_INFO(log, "Starting to restore disk {}. Revision: {}, Source bucket: {}, Source path: {}",
-                 name, information.revision, information.source_bucket, information.source_path);
+        LOG_INFO(
+            log,
+            "Starting to restore disk {}. Revision: {}, Source bucket: {}, Source path: {}",
+            name,
+            information.revision,
+            information.source_bucket,
+            information.source_path);
 
         if (readSchemaVersion(information.source_bucket, information.source_path) < RESTORABLE_SCHEMA_VERSION)
             throw Exception("Source bucket doesn't have restorable schema.", ErrorCodes::BAD_ARGUMENTS);
@@ -817,8 +841,7 @@ void DiskS3::restoreFiles(const RestoreInformation & restore_information)
     LOG_INFO(log, "Starting restore files for disk {}", name);
 
     std::vector<std::future<void>> results;
-    auto restore_files = [this, &restore_information, &results](auto list_result)
-    {
+    auto restore_files = [this, &restore_information, &results](auto list_result) {
         std::vector<String> keys;
         for (const auto & row : list_result.GetContents())
         {
@@ -838,8 +861,7 @@ void DiskS3::restoreFiles(const RestoreInformation & restore_information)
 
         if (!keys.empty())
         {
-            auto result = getExecutor().execute([this, &restore_information, keys]()
-            {
+            auto result = getExecutor().execute([this, &restore_information, keys]() {
                 processRestoreFiles(restore_information.source_bucket, restore_information.source_path, keys);
             });
 
@@ -903,8 +925,7 @@ void DiskS3::restoreFileOperations(const RestoreInformation & restore_informatio
     bool send_metadata = bucket != restore_information.source_bucket || remote_fs_root_path != restore_information.source_path;
 
     std::set<String> renames;
-    auto restore_file_operations = [this, &restore_information, &renames, &send_metadata](auto list_result)
-    {
+    auto restore_file_operations = [this, &restore_information, &renames, &send_metadata](auto list_result) {
         const String rename = "rename";
         const String hardlink = "hardlink";
 
@@ -1055,7 +1076,7 @@ void DiskS3::applyNewSettings(const Poco::Util::AbstractConfiguration & config, 
 
     current_settings.set(std::move(new_settings));
 
-    if (AsyncExecutor * exec = dynamic_cast<AsyncExecutor*>(&getExecutor()))
+    if (AsyncExecutor * exec = dynamic_cast<AsyncExecutor *>(&getExecutor()))
         exec->setMaxThreads(current_settings.get()->thread_pool_size);
 }
 

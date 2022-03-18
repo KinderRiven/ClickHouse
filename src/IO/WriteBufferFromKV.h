@@ -5,37 +5,33 @@
 #include <base/logger_useful.h>
 #include <base/types.h>
 
-#include <Disks/KV/SimpleKV.h>
 #include <IO/WriteBufferFromFileBase.h>
+#include <IO/WriteBufferFromKVBase.h>
 
 namespace DB
 {
 
+/// key-value stream
 class WriteBufferFromKV : public WriteBufferFromFileBase
 {
 public:
-    WriteBufferFromKV(SimpleKV * kv, const String & key_, size_t value_length_);
+    WriteBufferFromKV(std::unique_ptr<WriteBufferFromKVBase> impl_);
 
     ~WriteBufferFromKV() = default;
 
     void sync() override;
 
-    void nextImpl() override;
-
     void finalize() override;
 
-    std::string getFileName() const override { return key; }
+    std::string getFileName() const override;
 
-private:
-    SimpleKV * kv_store = nullptr;
-
-    String key;
-
-    String value;
-
-    size_t value_length;
+protected:
+    std::unique_ptr<WriteBufferFromKVBase> impl;
 
     bool finalized = false;
+
+private:
+    void nextImpl() override;
 };
 
 };
