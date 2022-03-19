@@ -90,6 +90,8 @@ void MergeTreeDataPartWriterWide::addStreams(
     const NameAndTypePair & column,
     const ASTPtr & effective_codec_desc)
 {
+    LOG_TRACE(log, "[PART_PATH:{}][STREAM_NAME:{}][EXTENSION:{}/{}]", part_path, column.name, DATA_FILE_EXTENSION, marks_file_extension);
+    
     ISerialization::StreamCallback callback = [&](const auto & substream_path)
     {
         assert(!substream_path.empty());
@@ -258,9 +260,13 @@ void MergeTreeDataPartWriterWide::flushMarkToFile(const StreamNameAndMark & stre
 {
     Stream & stream = *column_streams[stream_with_mark.stream_name];
     writeIntBinary(stream_with_mark.mark.offset_in_compressed_file, stream.marks);
+    writeIntBinary(stream_with_mark.mark.offset_in_compressed_file, stream.marks_cached);
     writeIntBinary(stream_with_mark.mark.offset_in_decompressed_block, stream.marks);
-    if (settings.can_use_adaptive_granularity)
+    writeIntBinary(stream_with_mark.mark.offset_in_decompressed_block, stream.marks_cached);
+    if (settings.can_use_adaptive_granularity) {
         writeIntBinary(rows_in_mark, stream.marks);
+        writeIntBinary(rows_in_mark, stream.marks_cached);
+    }
 }
 
 StreamsWithMarks MergeTreeDataPartWriterWide::getCurrentMarksForColumn(

@@ -28,6 +28,12 @@ namespace ErrorCodes
     extern const int CANNOT_DELETE_DIRECTORY;
 }
 
+RemoteDiskCache::RemoteDiskCache(const String & remote_fs_root_path_, const String & metadata_path_)
+    : remote_fs_root_path(remote_fs_root_path_), metadata_path(metadata_path_)
+{
+    LOG_TRACE(log, "[remote_fs_root_path:{}][metadata_path:{}]", remote_fs_root_path, metadata_path);
+}
+
 /// Load metadata by path or create empty if `create` flag is set.
 IDiskRemote::Metadata::Metadata(
     const String & remote_fs_root_path_, const String & disk_path_, const String & metadata_file_path_, bool create)
@@ -107,12 +113,14 @@ void IDiskRemote::Metadata::addObject(const String & path, size_t size)
     remote_fs_objects.emplace_back(path, size);
 }
 
+///
 /// Fsync metadata file if 'sync' flag is set.
 /// 2                                               [VERSION_RELATIVE_PATHS]
 /// 1       2376                                    [remote_fs_objects.size] [total_size]
 /// 2376    unrvsmduhjournyrxkkaccudgjtczfzw        [object_size]   [object_name]
 /// 0                                               [ref_count]
 /// 0                                               [read_only]
+///
 void IDiskRemote::Metadata::save(bool sync)
 {
     WriteBufferFromFile buf(disk_path + metadata_file_path, 1024);

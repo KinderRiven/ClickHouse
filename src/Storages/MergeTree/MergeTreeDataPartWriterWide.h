@@ -118,6 +118,8 @@ private:
     /// How many rows we have already written in the current mark.
     /// More than zero when incoming blocks are smaller then their granularity.
     size_t rows_written_in_last_mark = 0;
+
+     Poco::Logger * log = &Poco::Logger::get("[MergeTreeDataPartWriterWide]");
 };
 
 }

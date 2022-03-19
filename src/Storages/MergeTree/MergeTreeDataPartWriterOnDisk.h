@@ -1,13 +1,13 @@
 #pragma once
 
-#include <Storages/MergeTree/IMergeTreeDataPartWriter.h>
+#include <Compression/CompressedWriteBuffer.h>
+#include <Disks/IDisk.h>
+#include <IO/HashingWriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteBufferFromFileBase.h>
-#include <Compression/CompressedWriteBuffer.h>
-#include <IO/HashingWriteBuffer.h>
-#include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
-#include <Disks/IDisk.h>
+#include <Storages/MergeTree/IMergeTreeDataPartWriter.h>
+#include <Storages/MergeTree/MergeTreeData.h>
 
 
 namespace DB
@@ -71,6 +71,10 @@ public:
         std::unique_ptr<WriteBufferFromFileBase> marks_file;
         HashingWriteBuffer marks;
 
+        /// mark_cache
+        std::unique_ptr<WriteBufferFromFileBase> marks_cached_file;
+        HashingWriteBuffer marks_cached;
+
         void finalize();
 
         void sync() const;
@@ -90,13 +94,10 @@ public:
         const MergeTreeWriterSettings & settings,
         const MergeTreeIndexGranularity & index_granularity);
 
-    void setWrittenOffsetColumns(WrittenOffsetColumns * written_offset_columns_)
-    {
-        written_offset_columns = written_offset_columns_;
-    }
+    void setWrittenOffsetColumns(WrittenOffsetColumns * written_offset_columns_) { written_offset_columns = written_offset_columns_; }
 
 protected:
-     /// Count index_granularity for block and store in `index_granularity`
+    /// Count index_granularity for block and store in `index_granularity`
     size_t computeIndexGranularity(const Block & block) const;
 
     /// Write primary index according to granules_to_write
@@ -136,6 +137,8 @@ protected:
 
     std::unique_ptr<WriteBufferFromFileBase> index_file_stream;
     std::unique_ptr<HashingWriteBuffer> index_stream;
+    std::unique_ptr<WriteBufferFromFileBase> index_cached_file_stream;
+    std::unique_ptr<HashingWriteBuffer> index_cached_stream;
     DataTypes index_types;
     /// Index columns from the last block
     /// It's written to index file in the `writeSuffixAndFinalizePart` method

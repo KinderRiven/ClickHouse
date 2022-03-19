@@ -168,6 +168,7 @@ DiskS3::DiskS3(
     , settings_getter(settings_getter_)
     , context(context_)
 {
+    disk_cache = std::make_shared<RemoteDiskCache>(s3_root_path_, metadata_path_);
 }
 
 RemoteFSPathKeeperPtr DiskS3::createFSPathKeeper() const

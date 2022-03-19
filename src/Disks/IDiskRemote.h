@@ -3,12 +3,13 @@
 #include <Common/config.h>
 
 #include <atomic>
+#include <filesystem>
+#include <map>
+#include <utility>
 #include <Disks/DiskFactory.h>
 #include <Disks/Executor.h>
-#include <utility>
 #include <Common/MultiVersion.h>
 #include <Common/ThreadPool.h>
-#include <filesystem>
 
 namespace fs = std::filesystem;
 
@@ -20,7 +21,7 @@ namespace DB
 class RemoteFSPathKeeper
 {
 public:
-    RemoteFSPathKeeper(size_t chunk_limit_) : chunk_limit(chunk_limit_) {}
+    RemoteFSPathKeeper(size_t chunk_limit_) : chunk_limit(chunk_limit_) { }
 
     virtual ~RemoteFSPathKeeper() = default;
 
@@ -36,12 +37,33 @@ using RemoteFSPathKeeperPtr = std::shared_ptr<RemoteFSPathKeeper>;
 class IAsynchronousReader;
 using AsynchronousReaderPtr = std::shared_ptr<IAsynchronousReader>;
 
+///
+/// Remote Disk Cache
+/// When performing remote disk access, we keep the backup of .mrk .idx when writing data,
+/// or load the remote file to the local as a cache when performing a cold start.
+///
+class RemoteDiskCache
+{
+public:
+    RemoteDiskCache(const String & remote_fs_root_path, const String & metadata_path);
+
+    ~RemoteDiskCache() = default;
+
+private:
+    /// path to cache file
+    std::map<String, String> cache_map;
+
+    const String remote_fs_root_path;
+
+    const String metadata_path;
+
+    Poco::Logger * log = &Poco::Logger::get("[RemoteDiskCache]");
+};
 
 /// Base Disk class for remote FS's, which are not posix-compatible (DiskS3 and DiskHDFS)
 class IDiskRemote : public IDisk
 {
-
-friend class DiskRemoteReservation;
+    friend class DiskRemoteReservation;
 
 public:
     IDiskRemote(
@@ -138,6 +160,8 @@ protected:
 
     const String metadata_path;
 
+    std::shared_ptr<RemoteDiskCache> disk_cache;
+
 private:
     void removeMeta(const String & path, RemoteFSPathKeeperPtr fs_paths_keeper);
 
@@ -168,7 +192,9 @@ struct RemoteMetadata
     const String metadata_file_path;
 
     RemoteMetadata(const String & remote_fs_root_path_, const String & metadata_file_path_)
-        : remote_fs_root_path(remote_fs_root_path_), metadata_file_path(metadata_file_path_) {}
+        : remote_fs_root_path(remote_fs_root_path_), metadata_file_path(metadata_file_path_)
+    {
+    }
 };
 
 /// Remote FS (S3, HDFS) metadata file layout:
@@ -195,24 +221,20 @@ struct IDiskRemote::Metadata : RemoteMetadata
     bool read_only = false;
 
     /// Load metadata by path or create empty if `create` flag is set.
-    Metadata(const String & remote_fs_root_path_,
-            const String & disk_path_,
-            const String & metadata_file_path_,
-            bool create = false);
+    Metadata(const String & remote_fs_root_path_, const String & disk_path_, const String & metadata_file_path_, bool create = false);
 
     void addObject(const String & path, size_t size);
 
     /// Fsync metadata file if 'sync' flag is set.
     void save(bool sync = false);
-
 };
 
 
 class RemoteDiskDirectoryIterator final : public IDiskDirectoryIterator
 {
 public:
-    RemoteDiskDirectoryIterator() {}
-    RemoteDiskDirectoryIterator(const String & full_path, const String & folder_path_) : iter(full_path), folder_path(folder_path_) {}
+    RemoteDiskDirectoryIterator() { }
+    RemoteDiskDirectoryIterator(const String & full_path, const String & folder_path_) : iter(full_path), folder_path(folder_path_) { }
 
     void next() override { ++iter; }
 
@@ -263,40 +285,35 @@ private:
 class AsyncExecutor : public Executor
 {
 public:
-    explicit AsyncExecutor(const String & name_, int thread_pool_size)
-        : name(name_)
-        , pool(ThreadPool(thread_pool_size)) {}
+    explicit AsyncExecutor(const String & name_, int thread_pool_size) : name(name_), pool(ThreadPool(thread_pool_size)) { }
 
     std::future<void> execute(std::function<void()> task) override
     {
         auto promise = std::make_shared<std::promise<void>>();
-        pool.scheduleOrThrowOnError(
-            [promise, task]()
+        pool.scheduleOrThrowOnError([promise, task]() {
+            try
             {
+                task();
+                promise->set_value();
+            }
+            catch (...)
+            {
+                tryLogCurrentException("Failed to run async task");
+
                 try
                 {
-                    task();
-                    promise->set_value();
+                    promise->set_exception(std::current_exception());
                 }
                 catch (...)
                 {
-                    tryLogCurrentException("Failed to run async task");
-
-                    try
-                    {
-                        promise->set_exception(std::current_exception());
-                    }
-                    catch (...) {}
                 }
-            });
+            }
+        });
 
         return promise->get_future();
     }
 
-    void setMaxThreads(size_t threads)
-    {
-        pool.setMaxThreads(threads);
-    }
+    void setMaxThreads(size_t threads) { pool.setMaxThreads(threads); }
 
 private:
     String name;
