@@ -84,6 +84,10 @@ private:
     /// marks -> marks_file
     std::unique_ptr<WriteBufferFromFileBase> marks_file;
     HashingWriteBuffer marks;
+
+    /// cached marks -> marks_cached_file
+    std::unique_ptr<WriteBufferFromFileBase> marks_cached_file;
+    HashingWriteBuffer marks_cached;
 };
 
 }

@@ -1,5 +1,5 @@
-#include <Storages/MergeTree/MergeTreeDataPartWriterCompact.h>
 #include <Storages/MergeTree/MergeTreeDataPartCompact.h>
+#include <Storages/MergeTree/MergeTreeDataPartWriterCompact.h>
 
 namespace DB
 {
@@ -18,19 +18,25 @@ MergeTreeDataPartWriterCompact::MergeTreeDataPartWriterCompact(
     const CompressionCodecPtr & default_codec_,
     const MergeTreeWriterSettings & settings_,
     const MergeTreeIndexGranularity & index_granularity_)
-    : MergeTreeDataPartWriterOnDisk(data_part_, columns_list_, metadata_snapshot_,
-        indices_to_recalc_, marks_file_extension_,
-        default_codec_, settings_, index_granularity_)
+    : MergeTreeDataPartWriterOnDisk(
+        data_part_,
+        columns_list_,
+        metadata_snapshot_,
+        indices_to_recalc_,
+        marks_file_extension_,
+        default_codec_,
+        settings_,
+        index_granularity_)
     , plain_file(data_part->volume->getDisk()->writeFile(
-            part_path + MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION,
-            settings.max_compress_block_size,
-            WriteMode::Rewrite))
+          part_path + MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION, settings.max_compress_block_size, WriteMode::Rewrite))
     , plain_hashing(*plain_file)
     , marks_file(data_part->volume->getDisk()->writeFile(
-        part_path + MergeTreeDataPartCompact::DATA_FILE_NAME + marks_file_extension_,
-        4096,
-        WriteMode::Rewrite))
+          part_path + MergeTreeDataPartCompact::DATA_FILE_NAME + marks_file_extension_, 4096, WriteMode::Rewrite))
     , marks(*marks_file)
+    , marks_cached_file(std::make_unique<WriteBufferFromFile>(
+          data_part->volume->getDisk()->getPath() + part_path + MergeTreeDataPartCompact::DATA_FILE_NAME + marks_file_extension_
+          + ".cache"))
+    , marks_cached(*marks_cached_file)
 {
     const auto & storage_columns = metadata_snapshot->getColumns();
     for (const auto & column : columns_list)
@@ -39,8 +45,7 @@ MergeTreeDataPartWriterCompact::MergeTreeDataPartWriterCompact(
 
 void MergeTreeDataPartWriterCompact::addStreams(const NameAndTypePair & column, const ASTPtr & effective_codec_desc)
 {
-    ISerialization::StreamCallback callback = [&](const auto & substream_path)
-    {
+    ISerialization::StreamCallback callback = [&](const auto & substream_path) {
         assert(!substream_path.empty());
         String stream_name = ISerialization::getFileNameForStream(column, substream_path);
 
@@ -72,58 +77,66 @@ void MergeTreeDataPartWriterCompact::addStreams(const NameAndTypePair & column, 
 namespace
 {
 
-/// Get granules for block using index_granularity
-Granules getGranulesToWrite(const MergeTreeIndexGranularity & index_granularity, size_t block_rows, size_t current_mark, bool last_block)
-{
-    if (current_mark >= index_granularity.getMarksCount())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Request to get granules from mark {} but index granularity size is {}", current_mark, index_granularity.getMarksCount());
-
-    Granules result;
-    size_t current_row = 0;
-    while (current_row < block_rows)
+    /// Get granules for block using index_granularity
+    Granules
+    getGranulesToWrite(const MergeTreeIndexGranularity & index_granularity, size_t block_rows, size_t current_mark, bool last_block)
     {
-        size_t expected_rows_in_mark = index_granularity.getMarkRows(current_mark);
-        size_t rows_left_in_block = block_rows - current_row;
-        if (rows_left_in_block < expected_rows_in_mark && !last_block)
+        if (current_mark >= index_granularity.getMarksCount())
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Request to get granules from mark {} but index granularity size is {}",
+                current_mark,
+                index_granularity.getMarksCount());
+
+        Granules result;
+        size_t current_row = 0;
+        while (current_row < block_rows)
         {
-            /// Invariant: we always have equal amount of rows for block in compact parts because we accumulate them in buffer.
-            /// The only exclusion is the last block, when we cannot accumulate more rows.
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Required to write {} rows, but only {} rows was written for the non last granule", expected_rows_in_mark, rows_left_in_block);
+            size_t expected_rows_in_mark = index_granularity.getMarkRows(current_mark);
+            size_t rows_left_in_block = block_rows - current_row;
+            if (rows_left_in_block < expected_rows_in_mark && !last_block)
+            {
+                /// Invariant: we always have equal amount of rows for block in compact parts because we accumulate them in buffer.
+                /// The only exclusion is the last block, when we cannot accumulate more rows.
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Required to write {} rows, but only {} rows was written for the non last granule",
+                    expected_rows_in_mark,
+                    rows_left_in_block);
+            }
+
+            result.emplace_back(Granule{
+                .start_row = current_row,
+                .rows_to_write = std::min(rows_left_in_block, expected_rows_in_mark),
+                .mark_number = current_mark,
+                .mark_on_start = true,
+                .is_complete = (rows_left_in_block >= expected_rows_in_mark)});
+            current_row += result.back().rows_to_write;
+            current_mark++;
         }
 
-        result.emplace_back(Granule{
-            .start_row = current_row,
-            .rows_to_write = std::min(rows_left_in_block, expected_rows_in_mark),
-            .mark_number = current_mark,
-            .mark_on_start = true,
-            .is_complete = (rows_left_in_block >= expected_rows_in_mark)
-        });
-        current_row += result.back().rows_to_write;
-        current_mark++;
+        return result;
     }
 
-    return result;
-}
+    /// Write single granule of one column (rows between 2 marks)
+    void writeColumnSingleGranule(
+        const ColumnWithTypeAndName & column,
+        const SerializationPtr & serialization,
+        ISerialization::OutputStreamGetter stream_getter,
+        size_t from_row,
+        size_t number_of_rows)
+    {
+        ISerialization::SerializeBinaryBulkStatePtr state;
+        ISerialization::SerializeBinaryBulkSettings serialize_settings;
 
-/// Write single granule of one column (rows between 2 marks)
-void writeColumnSingleGranule(
-    const ColumnWithTypeAndName & column,
-    const SerializationPtr & serialization,
-    ISerialization::OutputStreamGetter stream_getter,
-    size_t from_row,
-    size_t number_of_rows)
-{
-    ISerialization::SerializeBinaryBulkStatePtr state;
-    ISerialization::SerializeBinaryBulkSettings serialize_settings;
+        serialize_settings.getter = stream_getter;
+        serialize_settings.position_independent_encoding = true; //-V1048
+        serialize_settings.low_cardinality_max_dictionary_size = 0; //-V1048
 
-    serialize_settings.getter = stream_getter;
-    serialize_settings.position_independent_encoding = true; //-V1048
-    serialize_settings.low_cardinality_max_dictionary_size = 0; //-V1048
-
-    serialization->serializeBinaryBulkStatePrefix(serialize_settings, state);
-    serialization->serializeBinaryBulkWithMultipleStreams(*column.column, from_row, number_of_rows, serialize_settings, state);
-    serialization->serializeBinaryBulkStateSuffix(serialize_settings, state);
-}
+        serialization->serializeBinaryBulkStatePrefix(serialize_settings, state);
+        serialization->serializeBinaryBulkWithMultipleStreams(*column.column, from_row, number_of_rows, serialize_settings, state);
+        serialization->serializeBinaryBulkStateSuffix(serialize_settings, state);
+    }
 
 }
 
@@ -184,8 +197,7 @@ void MergeTreeDataPartWriterCompact::writeDataBlock(const Block & block, const G
             /// So we flush each stream (using next()) before using new one, because otherwise we will override
             /// data in result file.
             CompressedStreamPtr prev_stream;
-            auto stream_getter = [&, this](const ISerialization::SubstreamPath & substream_path) -> WriteBuffer *
-            {
+            auto stream_getter = [&, this](const ISerialization::SubstreamPath & substream_path) -> WriteBuffer * {
                 String stream_name = ISerialization::getFileNameForStream(*name_and_type, substream_path);
 
                 auto & result_stream = compressed_streams[stream_name];
@@ -206,15 +218,23 @@ void MergeTreeDataPartWriterCompact::writeDataBlock(const Block & block, const G
             writeIntBinary(plain_hashing.count(), marks);
             writeIntBinary(UInt64(0), marks);
 
+            /// cache
+            writeIntBinary(plain_hashing.count(), marks_cached);
+            writeIntBinary(UInt64(0), marks_cached);
+
             writeColumnSingleGranule(
-                block.getByName(name_and_type->name), serializations[name_and_type->name],
-                stream_getter, granule.start_row, granule.rows_to_write);
+                block.getByName(name_and_type->name),
+                serializations[name_and_type->name],
+                stream_getter,
+                granule.start_row,
+                granule.rows_to_write);
 
             /// Each type always have at least one substream
             prev_stream->hashing_buf.next(); //-V522
         }
 
         writeIntBinary(granule.rows_to_write, marks);
+        writeIntBinary(granule.rows_to_write, marks_cached);
     }
 }
 
@@ -245,28 +265,32 @@ void MergeTreeDataPartWriterCompact::finishDataSerialization(IMergeTreeDataPart:
         {
             writeIntBinary(plain_hashing.count(), marks);
             writeIntBinary(UInt64(0), marks);
+            /// cache
+            writeIntBinary(plain_hashing.count(), marks_cached);
+            writeIntBinary(UInt64(0), marks_cached);
         }
         writeIntBinary(UInt64(0), marks);
+        writeIntBinary(UInt64(0), marks_cached);
     }
 
     plain_file->next();
     marks.next();
+    marks_cached.next();
     addToChecksums(checksums);
 
     plain_file->finalize();
     marks_file->finalize();
+    marks_cached_file->finalize();
     if (sync)
     {
         plain_file->sync();
         marks_file->sync();
+        marks_cached_file->sync();
     }
 }
 
 static void fillIndexGranularityImpl(
-    MergeTreeIndexGranularity & index_granularity,
-    size_t index_offset,
-    size_t index_granularity_for_block,
-    size_t rows_in_block)
+    MergeTreeIndexGranularity & index_granularity, size_t index_offset, size_t index_granularity_for_block, size_t rows_in_block)
 {
     for (size_t current_row = index_offset; current_row < rows_in_block; current_row += index_granularity_for_block)
     {
@@ -274,8 +298,7 @@ static void fillIndexGranularityImpl(
 
         /// Try to extend last granule if block is large enough
         ///  or it isn't first in granule (index_offset != 0).
-        if (rows_left_in_block < index_granularity_for_block &&
-            (rows_in_block >= index_granularity_for_block || index_offset != 0))
+        if (rows_left_in_block < index_granularity_for_block && (rows_in_block >= index_granularity_for_block || index_offset != 0))
         {
             // If enough rows are left, create a new granule. Otherwise, extend previous granule.
             // So, real size of granule differs from index_granularity_for_block not more than 50%.
@@ -297,17 +320,13 @@ void MergeTreeDataPartWriterCompact::fillIndexGranularity(size_t index_granulari
     if (index_granularity.getMarksCount() > getCurrentMark())
         index_offset = index_granularity.getMarkRows(getCurrentMark()) - columns_buffer.size();
 
-    fillIndexGranularityImpl(
-        index_granularity,
-        index_offset,
-        index_granularity_for_block,
-        rows_in_block);
+    fillIndexGranularityImpl(index_granularity, index_offset, index_granularity_for_block, rows_in_block);
 }
 
 void MergeTreeDataPartWriterCompact::addToChecksums(MergeTreeDataPartChecksums & checksums)
 {
     String data_file_name = MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION;
-    String marks_file_name = MergeTreeDataPartCompact::DATA_FILE_NAME +  marks_file_extension;
+    String marks_file_name = MergeTreeDataPartCompact::DATA_FILE_NAME + marks_file_extension;
 
     size_t uncompressed_size = 0;
     CityHash_v1_0_2::uint128 uncompressed_hash{0, 0};
@@ -316,8 +335,8 @@ void MergeTreeDataPartWriterCompact::addToChecksums(MergeTreeDataPartChecksums &
     {
         uncompressed_size += stream->hashing_buf.count();
         auto stream_hash = stream->hashing_buf.getHash();
-        uncompressed_hash = CityHash_v1_0_2::CityHash128WithSeed(
-            reinterpret_cast<char *>(&stream_hash), sizeof(stream_hash), uncompressed_hash);
+        uncompressed_hash
+            = CityHash_v1_0_2::CityHash128WithSeed(reinterpret_cast<char *>(&stream_hash), sizeof(stream_hash), uncompressed_hash);
     }
 
     checksums.files[data_file_name].is_compressed = true;
@@ -343,8 +362,7 @@ void MergeTreeDataPartWriterCompact::ColumnsBuffer::add(MutableColumns && column
 
 Columns MergeTreeDataPartWriterCompact::ColumnsBuffer::releaseColumns()
 {
-    Columns res(std::make_move_iterator(accumulated_columns.begin()),
-        std::make_move_iterator(accumulated_columns.end()));
+    Columns res(std::make_move_iterator(accumulated_columns.begin()), std::make_move_iterator(accumulated_columns.end()));
     accumulated_columns.clear();
     return res;
 }

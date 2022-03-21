@@ -12,7 +12,6 @@
 namespace DB
 {
 
-
 namespace ErrorCodes
 {
     extern const int CHECKSUM_DOESNT_MATCH;
@@ -23,7 +22,6 @@ namespace ErrorCodes
     extern const int UNKNOWN_FORMAT;
     extern const int NO_FILE_IN_DATA_PART;
 }
-
 
 void MergeTreeDataPartChecksum::checkEqual(const MergeTreeDataPartChecksum & rhs, bool have_uncompressed, const String & name) const
 {
@@ -55,7 +53,6 @@ void MergeTreeDataPartChecksum::checkSize(const DiskPtr & disk, const String & p
         throw Exception(fullPath(disk, path) + " has unexpected size: " + toString(size) + " instead of " + toString(file_size),
             ErrorCodes::BAD_SIZE_OF_FILE_IN_DATA_PART);
 }
-
 
 void MergeTreeDataPartChecksums::checkEqual(const MergeTreeDataPartChecksums & rhs, bool have_uncompressed) const
 {

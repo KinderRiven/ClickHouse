@@ -168,7 +168,6 @@ DiskS3::DiskS3(
     , settings_getter(settings_getter_)
     , context(context_)
 {
-    disk_cache = std::make_shared<RemoteDiskCache>(s3_root_path_, metadata_path_);
 }
 
 RemoteFSPathKeeperPtr DiskS3::createFSPathKeeper() const
@@ -222,26 +221,36 @@ void DiskS3::moveFile(const String & from_path, const String & to_path, bool sen
 std::unique_ptr<ReadBufferFromFileBase>
 DiskS3::readFile(const String & path, const ReadSettings & read_settings, std::optional<size_t>) const
 {
-    auto settings = current_settings.get();
-    auto metadata = readMeta(path);
-
-    LOG_TRACE(
-        log, "Read from file by path: {}. Existing S3 objects: {}", backQuote(metadata_path + path), metadata.remote_fs_objects.size());
-
-    bool threadpool_read = read_settings.remote_fs_method == RemoteFSReadMethod::threadpool;
-
-    auto s3_impl = std::make_unique<ReadBufferFromS3Gather>(
-        path, settings->client, bucket, metadata, settings->s3_max_single_read_retries, read_settings, threadpool_read);
-
-    if (threadpool_read)
+    LOG_TRACE(cache_log, "read file [{}] from S3.", path);
+    if (hasCached(path)) /// read from cached path
     {
-        auto reader = getThreadPoolReader();
-        return std::make_unique<AsynchronousReadIndirectBufferFromRemoteFS>(reader, read_settings, std::move(s3_impl));
+        String cached_file_path = getPath() + path + ".cache";
+        LOG_TRACE(cache_log, "read cached file [{}] from local.", cached_file_path);
+        return std::make_unique<ReadBufferFromFile>(cached_file_path);
     }
     else
     {
-        auto buf = std::make_unique<ReadIndirectBufferFromRemoteFS>(std::move(s3_impl));
-        return std::make_unique<SeekAvoidingReadBuffer>(std::move(buf), settings->min_bytes_for_seek);
+        auto settings = current_settings.get();
+        auto metadata = readMeta(path);
+
+        LOG_TRACE(
+            log, "Read from file by path: {}. Existing S3 objects: {}", backQuote(metadata_path + path), metadata.remote_fs_objects.size());
+
+        bool threadpool_read = read_settings.remote_fs_method == RemoteFSReadMethod::threadpool;
+
+        auto s3_impl = std::make_unique<ReadBufferFromS3Gather>(
+            path, settings->client, bucket, metadata, settings->s3_max_single_read_retries, read_settings, threadpool_read);
+
+        if (threadpool_read)
+        {
+            auto reader = getThreadPoolReader();
+            return std::make_unique<AsynchronousReadIndirectBufferFromRemoteFS>(reader, read_settings, std::move(s3_impl));
+        }
+        else
+        {
+            auto buf = std::make_unique<ReadIndirectBufferFromRemoteFS>(std::move(s3_impl));
+            return std::make_unique<SeekAvoidingReadBuffer>(std::move(buf), settings->min_bytes_for_seek);
+        }
     }
 }
 

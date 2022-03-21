@@ -37,28 +37,6 @@ using RemoteFSPathKeeperPtr = std::shared_ptr<RemoteFSPathKeeper>;
 class IAsynchronousReader;
 using AsynchronousReaderPtr = std::shared_ptr<IAsynchronousReader>;
 
-///
-/// Remote Disk Cache
-/// When performing remote disk access, we keep the backup of .mrk .idx when writing data,
-/// or load the remote file to the local as a cache when performing a cold start.
-///
-class RemoteDiskCache
-{
-public:
-    RemoteDiskCache(const String & remote_fs_root_path, const String & metadata_path);
-
-    ~RemoteDiskCache() = default;
-
-private:
-    /// path to cache file
-    std::map<String, String> cache_map;
-
-    const String remote_fs_root_path;
-
-    const String metadata_path;
-
-    Poco::Logger * log = &Poco::Logger::get("[RemoteDiskCache]");
-};
 
 /// Base Disk class for remote FS's, which are not posix-compatible (DiskS3 and DiskHDFS)
 class IDiskRemote : public IDisk
@@ -153,6 +131,9 @@ public:
 
     static AsynchronousReaderPtr getThreadPoolReader();
 
+    bool hasCached(const String & file_path) const;
+
+
 protected:
     Poco::Logger * log;
     const String name;
@@ -160,7 +141,7 @@ protected:
 
     const String metadata_path;
 
-    std::shared_ptr<RemoteDiskCache> disk_cache;
+    Poco::Logger * cache_log = &Poco::Logger::get("[RemoteDiskCache]");
 
 private:
     void removeMeta(const String & path, RemoteFSPathKeeperPtr fs_paths_keeper);
@@ -168,6 +149,8 @@ private:
     void removeMetaRecursive(const String & path, RemoteFSPathKeeperPtr fs_paths_keeper);
 
     bool tryReserve(UInt64 bytes);
+
+    bool isCachedFile(const String & file_path) const;
 
     UInt64 reserved_bytes = 0;
     UInt64 reservation_count = 0;

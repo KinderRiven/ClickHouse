@@ -15,15 +15,18 @@ void MergeTreeDataPartWriterOnDisk::Stream::finalize()
     /// 'compressed_buf' doesn't call next() on underlying buffer ('plain_hashing'). We should do it manually.
     plain_hashing.next();
     marks.next();
+    marks_cached.next();
 
     plain_file->finalize();
     marks_file->finalize();
+    marks_cached_file->finalize();
 }
 
 void MergeTreeDataPartWriterOnDisk::Stream::sync() const
 {
     plain_file->sync();
     marks_file->sync();
+    marks_cached_file->sync();
 }
 
 MergeTreeDataPartWriterOnDisk::Stream::Stream(
@@ -169,9 +172,9 @@ void MergeTreeDataPartWriterOnDisk::initSkipIndices()
             stream_name,
             data_part->volume->getDisk(),
             part_path + stream_name,
-            index_helper->getSerializedFileExtension(),
+            index_helper->getSerializedFileExtension(), /// .idx
             part_path + stream_name,
-            marks_file_extension,
+            marks_file_extension, /// .mrk
             default_codec,
             settings.max_compress_block_size));
         skip_indices_aggregators.push_back(index_helper->createIndexAggregator());
@@ -288,9 +291,12 @@ void MergeTreeDataPartWriterOnDisk::finishPrimaryIndexSerialization(MergeTreeDat
         index_stream->next();
         index_cached_stream->next();
         checksums.files["primary.idx"].file_size = index_stream->count();
-        checksums.files["primary.idx.cache"].file_size = index_cached_stream->count();
         checksums.files["primary.idx"].file_hash = index_stream->getHash();
-        checksums.files["primary.idx.cache"].file_hash = index_cached_stream->getHash();
+        ///
+        /// In order to prevent startup failure caused by cache emptying,
+        /// there is no need to add the cache file to the checksum.
+        /// checksums.files["primary.idx.cache"].file_size = index_cached_stream->count();
+        /// checksums.files["primary.idx.cache"].file_hash = index_cached_stream->getHash();
 
         index_file_stream->finalize();
         index_cached_file_stream->finalize();

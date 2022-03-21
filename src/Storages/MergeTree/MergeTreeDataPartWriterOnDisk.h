@@ -62,6 +62,7 @@ public:
         std::string marks_file_extension;
 
         /// compressed -> compressed_buf -> plain_hashing -> plain_file
+        /// data file
         std::unique_ptr<WriteBufferFromFileBase> plain_file;
         HashingWriteBuffer plain_hashing;
         CompressedWriteBuffer compressed_buf;

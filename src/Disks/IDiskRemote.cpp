@@ -28,11 +28,6 @@ namespace ErrorCodes
     extern const int CANNOT_DELETE_DIRECTORY;
 }
 
-RemoteDiskCache::RemoteDiskCache(const String & remote_fs_root_path_, const String & metadata_path_)
-    : remote_fs_root_path(remote_fs_root_path_), metadata_path(metadata_path_)
-{
-    LOG_TRACE(log, "[remote_fs_root_path:{}][metadata_path:{}]", remote_fs_root_path, metadata_path);
-}
 
 /// Load metadata by path or create empty if `create` flag is set.
 IDiskRemote::Metadata::Metadata(
@@ -107,6 +102,7 @@ IDiskRemote::Metadata::Metadata(
     }
 }
 
+
 void IDiskRemote::Metadata::addObject(const String & path, size_t size)
 {
     total_size += size;
@@ -151,6 +147,7 @@ void IDiskRemote::Metadata::save(bool sync)
     if (sync)
         buf.sync();
 }
+
 
 IDiskRemote::Metadata IDiskRemote::readOrCreateMetaForWriting(const String & path, WriteMode mode)
 {
@@ -249,6 +246,7 @@ void IDiskRemote::removeMetaRecursive(const String & path, RemoteFSPathKeeperPtr
     }
 }
 
+
 DiskPtr DiskRemoteReservation::getDisk(size_t i) const
 {
     if (i != 0)
@@ -328,10 +326,41 @@ void IDiskRemote::createFile(const String & path)
 }
 
 
+bool IDiskRemote::isCachedFile(const String & file_path) const
+{
+    if (file_path.size() < 5)
+    {
+        return false;
+    }
+    String suffix = String(file_path.c_str() + (file_path.size() - 5), 5);
+    if (suffix == ".cache")
+    {
+        LOG_TRACE(cache_log, "Find a cached file:{}", getPath() + file_path);
+        return true;
+    }
+    return false;
+}
+
+
+bool IDiskRemote::hasCached(const String & file_path) const
+{
+    String cached_path = file_path + ".cache";
+    return exists(cached_path);
+}
+
+
 size_t IDiskRemote::getFileSize(const String & path) const
 {
-    auto metadata = readMeta(path);
-    return metadata.total_size;
+    /// This is a .cache file for [.mrk/.mrk2/.idx/primary.idx]
+    if (isCachedFile(path))
+    {
+        return 0;
+    }
+    else
+    {
+        auto metadata = readMeta(path);
+        return metadata.total_size;
+    }
 }
 
 

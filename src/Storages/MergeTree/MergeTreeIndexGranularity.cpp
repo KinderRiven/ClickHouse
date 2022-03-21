@@ -95,7 +95,6 @@ size_t MergeTreeIndexGranularity::getRowsCountInRanges(const MarkRanges & ranges
     return total;
 }
 
-
 size_t MergeTreeIndexGranularity::countMarksForRows(size_t from_mark, size_t number_of_rows, size_t offset_in_rows) const
 {
     size_t rows_before_mark = getMarkStartingRow(from_mark);
