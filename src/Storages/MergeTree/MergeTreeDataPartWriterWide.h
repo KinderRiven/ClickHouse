@@ -10,6 +10,12 @@ struct StreamNameAndMark
     MarkInCompressedFile mark;
 };
 
+struct NewMarkInfo
+{
+    size_t current_mark_range;
+    size_t offset_in_mark_range;
+};
+
 using StreamsWithMarks = std::vector<StreamNameAndMark>;
 using ColumnNameToMark = std::unordered_map<String, StreamsWithMarks>;
 
@@ -32,6 +38,8 @@ public:
     void finish(IMergeTreeDataPart::Checksums & checksums, bool sync) final;
 
 private:
+    NewMarkInfo getNewMarkAndTryFlushMarkRange(const StreamNameAndMark & stream_with_mark);
+
     /// Finish serialization of data: write final mark if required and compute checksums
     /// Also validate written data in debug mode
     void finishDataSerialization(IMergeTreeDataPart::Checksums & checksums, bool sync);
@@ -40,10 +48,7 @@ private:
     /// Return how many marks were written and
     /// how many rows were written for last mark
     void writeColumn(
-        const NameAndTypePair & name_and_type,
-        const IColumn & column,
-        WrittenOffsetColumns & offset_columns,
-        const Granules & granules);
+        const NameAndTypePair & name_and_type, const IColumn & column, WrittenOffsetColumns & offset_columns, const Granules & granules);
 
     /// Write single granule of one column.
     void writeSingleGranule(
@@ -55,31 +60,25 @@ private:
         const Granule & granule);
 
     /// Take offsets from column and return as MarkInCompressed file with stream name
-    StreamsWithMarks getCurrentMarksForColumn(
-        const NameAndTypePair & column,
-        WrittenOffsetColumns & offset_columns,
-        ISerialization::SubstreamPath & path);
+    StreamsWithMarks
+    getCurrentMarksForColumn(const NameAndTypePair & column, WrittenOffsetColumns & offset_columns, ISerialization::SubstreamPath & path);
 
     /// Write mark to disk using stream and rows count
-    void flushMarkToFile(
-        const StreamNameAndMark & stream_with_mark,
-        size_t rows_in_mark);
+    void flushMarkToFile(const StreamNameAndMark & stream_with_mark, size_t rows_in_mark);
+
+    /// Flush new mark to file (*.new_mrk)
+    void flushNewMarkToFile(const NewMarkInfo & info, const StreamNameAndMark & stream_with_mark, size_t rows_in_mark);
+
+    /// Try to flush mark range info to file (*.mrs)
+    void flushMarkRangeToFile(const String & stream_name);
 
     /// Write mark for column taking offsets from column stream
     void writeSingleMark(
-        const NameAndTypePair & column,
-        WrittenOffsetColumns & offset_columns,
-        size_t number_of_rows,
-        ISerialization::SubstreamPath & path);
+        const NameAndTypePair & column, WrittenOffsetColumns & offset_columns, size_t number_of_rows, ISerialization::SubstreamPath & path);
 
-    void writeFinalMark(
-        const NameAndTypePair & column,
-        WrittenOffsetColumns & offset_columns,
-        ISerialization::SubstreamPath & path);
+    void writeFinalMark(const NameAndTypePair & column, WrittenOffsetColumns & offset_columns, ISerialization::SubstreamPath & path);
 
-    void addStreams(
-        const NameAndTypePair & column,
-        const ASTPtr & effective_codec_desc);
+    void addStreams(const NameAndTypePair & column, const ASTPtr & effective_codec_desc);
 
     /// Method for self check (used in debug-build only). Checks that written
     /// data and corresponding marks are consistent. Otherwise throws logical
@@ -118,6 +117,11 @@ private:
     /// How many rows we have already written in the current mark.
     /// More than zero when incoming blocks are smaller then their granularity.
     size_t rows_written_in_last_mark = 0;
+
+    /// Mark ranges
+    size_t marks_written_in_last_mark_range = 0;
+
+    Poco::Logger * trace_log = &Poco::Logger::get("[NewMark]");
 };
 
 }

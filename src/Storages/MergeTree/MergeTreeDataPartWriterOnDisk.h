@@ -1,13 +1,13 @@
 #pragma once
 
-#include <Storages/MergeTree/IMergeTreeDataPartWriter.h>
+#include <Compression/CompressedWriteBuffer.h>
+#include <Disks/IDisk.h>
+#include <IO/HashingWriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteBufferFromFileBase.h>
-#include <Compression/CompressedWriteBuffer.h>
-#include <IO/HashingWriteBuffer.h>
-#include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
-#include <Disks/IDisk.h>
+#include <Storages/MergeTree/IMergeTreeDataPartWriter.h>
+#include <Storages/MergeTree/MergeTreeData.h>
 
 
 namespace DB
@@ -57,6 +57,20 @@ public:
             const CompressionCodecPtr & compression_codec_,
             size_t max_compress_block_size_);
 
+        Stream(
+            const String & escaped_column_name_,
+            DiskPtr disk_,
+            const String & data_path_,
+            const std::string & data_file_extension_,
+            const std::string & marks_path_,
+            const std::string & marks_file_extension_,
+            const std::string & new_marks_path_,
+            const std::string & new_marks_file_extension_,
+            const std::string & mark_ranges_path_,
+            const std::string & mark_ranges_file_extension_,
+            const CompressionCodecPtr & compression_codec_,
+            size_t max_compress_block_size_);
+
         String escaped_column_name;
         std::string data_file_extension;
         std::string marks_file_extension;
@@ -70,6 +84,17 @@ public:
         /// marks -> marks_file
         std::unique_ptr<WriteBufferFromFileBase> marks_file;
         HashingWriteBuffer marks;
+
+        /// new_marks -> new_marks_file
+        std::unique_ptr<WriteBufferFromFileBase> new_marks_file;
+        HashingWriteBuffer new_marks;
+
+        /// mark_rangs -> mark_ranges_file
+        std::unique_ptr<WriteBufferFromFileBase> mark_ranges_file;
+        HashingWriteBuffer mark_ranges;
+        size_t current_mark_range = 0;
+        size_t current_mrange_offset_in_compressed_file = 0;
+
 
         void finalize();
 
@@ -90,13 +115,10 @@ public:
         const MergeTreeWriterSettings & settings,
         const MergeTreeIndexGranularity & index_granularity);
 
-    void setWrittenOffsetColumns(WrittenOffsetColumns * written_offset_columns_)
-    {
-        written_offset_columns = written_offset_columns_;
-    }
+    void setWrittenOffsetColumns(WrittenOffsetColumns * written_offset_columns_) { written_offset_columns = written_offset_columns_; }
 
 protected:
-     /// Count index_granularity for block and store in `index_granularity`
+    /// Count index_granularity for block and store in `index_granularity`
     size_t computeIndexGranularity(const Block & block) const;
 
     /// Write primary index according to granules_to_write
