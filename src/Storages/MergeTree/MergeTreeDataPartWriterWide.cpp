@@ -17,7 +17,7 @@ namespace
     constexpr auto DATA_FILE_EXTENSION = ".bin";
     constexpr auto NEW_MARKS_FILE_EXTENSION = ".new_mrk";
     constexpr auto MARK_RANGES_FILE_EXTENSION = ".mrs";
-    constexpr auto MAX_MARKS_IN_MARK_RANGE = 128;
+    constexpr auto MAX_MARKS_IN_MARK_RANGE = 8;
 }
 
 namespace
@@ -309,9 +309,8 @@ void MergeTreeDataPartWriterWide::flushNewMarkToFile(
 
 void MergeTreeDataPartWriterWide::flushMarkRangeToFile(const String & stream_name)
 {
-    ///
     ///   ---------------
-    /// 1 | 0     , 128 | <-- writeColumn
+    /// 1 |     0 , 128 | <-- writeColumn
     /// 2 | 12768 , 128 | <-- writeColumn
     /// 3 | 24679 , 128 | <-- writeColumn
     /// 4 | 25679 ,  63 | <-- adjustLastMarkIfNeedAndFlushToDisk
@@ -324,16 +323,16 @@ void MergeTreeDataPartWriterWide::flushMarkRangeToFile(const String & stream_nam
     Stream & stream = *column_streams[stream_name];
     writeIntBinary(stream.current_mrange_offset_in_compressed_file, stream.mark_ranges);
     if (settings.can_use_adaptive_granularity)
-        writeIntBinary(marks_written_in_last_mark_range, stream.mark_ranges);
+        writeIntBinary(stream.marks_written_in_last_mark_range, stream.mark_ranges);
 
-    marks_written_in_last_mark_range = 0;
+    stream.marks_written_in_last_mark_range = 0;
     stream.current_mark_range++;
 }
 
 NewMarkInfo MergeTreeDataPartWriterWide::getNewMarkAndTryFlushMarkRange(const StreamNameAndMark & stream_with_mark)
 {
     Stream & stream = *column_streams[stream_with_mark.stream_name];
-    if (marks_written_in_last_mark_range >= MAX_MARKS_IN_MARK_RANGE)
+    if (stream.marks_written_in_last_mark_range >= MAX_MARKS_IN_MARK_RANGE)
     {
         flushMarkRangeToFile(stream_with_mark.stream_name);
         /// new mark offset is new mark_range offset
@@ -350,7 +349,7 @@ NewMarkInfo MergeTreeDataPartWriterWide::getNewMarkAndTryFlushMarkRange(const St
     NewMarkInfo mark_info;
     mark_info.current_mark_range = stream.current_mark_range;
     mark_info.offset_in_mark_range = stream_with_mark.mark.offset_in_compressed_file - stream.current_mrange_offset_in_compressed_file;
-    marks_written_in_last_mark_range++;
+    stream.marks_written_in_last_mark_range++;
     return mark_info;
 }
 
@@ -475,7 +474,7 @@ void MergeTreeDataPartWriterWide::writeColumn(
                 NewMarkInfo new_mark_info = getNewMarkAndTryFlushMarkRange(mark);
                 /// maybe [1][2][..][36]
                 /// mark_range info
-                LOG_TRACE(trace_log, "[1][marks_written_in_last_mark_range:{}]", marks_written_in_last_mark_range);
+                LOG_TRACE(trace_log, "[1][current_mark:{}]", finished_granule);
                 /// mark info
                 LOG_TRACE(
                     trace_log,

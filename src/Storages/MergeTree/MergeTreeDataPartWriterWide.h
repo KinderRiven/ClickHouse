@@ -117,10 +117,7 @@ private:
     /// How many rows we have already written in the current mark.
     /// More than zero when incoming blocks are smaller then their granularity.
     size_t rows_written_in_last_mark = 0;
-
-    /// Mark ranges
-    size_t marks_written_in_last_mark_range = 0;
-
+    
     Poco::Logger * trace_log = &Poco::Logger::get("[NewMark]");
 };
 

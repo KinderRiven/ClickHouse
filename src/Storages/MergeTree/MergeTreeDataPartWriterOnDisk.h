@@ -92,6 +92,7 @@ public:
         /// mark_rangs -> mark_ranges_file
         std::unique_ptr<WriteBufferFromFileBase> mark_ranges_file;
         HashingWriteBuffer mark_ranges;
+        size_t marks_written_in_last_mark_range = 0;
         size_t current_mark_range = 0;
         size_t current_mrange_offset_in_compressed_file = 0;
 
