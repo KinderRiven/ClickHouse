@@ -16,12 +16,12 @@ void MergeTreeDataPartWriterOnDisk::Stream::finalize()
     plain_hashing.next();
     marks.next();
     new_marks.next(); // new mark
-    mark_ranges.next(); // mark ranges
+    sections.next(); // section
 
     plain_file->finalize();
     marks_file->finalize();
     new_marks_file->finalize(); // new mark
-    mark_ranges_file->finalize(); // mark ranges
+    sections_file->finalize(); // section
 }
 
 void MergeTreeDataPartWriterOnDisk::Stream::sync() const
@@ -29,7 +29,7 @@ void MergeTreeDataPartWriterOnDisk::Stream::sync() const
     plain_file->sync();
     marks_file->sync();
     new_marks_file->sync(); // new mark
-    mark_ranges_file->sync(); // mark ranges
+    sections_file->sync(); // section
 }
 
 MergeTreeDataPartWriterOnDisk::Stream::Stream(
@@ -52,8 +52,8 @@ MergeTreeDataPartWriterOnDisk::Stream::Stream(
     , marks(*marks_file)
     , new_marks_file(disk_->writeFile(marks_path_ + ".new_mrk", 4096, WriteMode::Rewrite))
     , new_marks(*new_marks_file)
-    , mark_ranges_file(disk_->writeFile(marks_path_ + ".mrs", 4096, WriteMode::Rewrite))
-    , mark_ranges(*mark_ranges_file)
+    , sections_file(disk_->writeFile(marks_path_ + ".sec", 4096, WriteMode::Rewrite))
+    , sections(*sections_file)
 {
 }
 
@@ -66,8 +66,8 @@ MergeTreeDataPartWriterOnDisk::Stream::Stream(
     const std::string & marks_file_extension_,
     const std::string & new_marks_path_,
     const std::string & new_marks_file_extension_,
-    const std::string & mark_ranges_path_,
-    const std::string & mark_ranges_file_extension_,
+    const std::string & sections_path_,
+    const std::string & sections_file_extension_,
     const CompressionCodecPtr & compression_codec_,
     size_t max_compress_block_size_)
     : escaped_column_name(escaped_column_name_)
@@ -81,8 +81,8 @@ MergeTreeDataPartWriterOnDisk::Stream::Stream(
     , marks(*marks_file)
     , new_marks_file(disk_->writeFile(new_marks_path_ + new_marks_file_extension_, 4096, WriteMode::Rewrite))
     , new_marks(*new_marks_file)
-    , mark_ranges_file(disk_->writeFile(mark_ranges_path_ + mark_ranges_file_extension_, 4096, WriteMode::Rewrite))
-    , mark_ranges(*mark_ranges_file)
+    , sections_file(disk_->writeFile(sections_path_ + sections_file_extension_, 4096, WriteMode::Rewrite))
+    , sections(*sections_file)
 {
 }
 

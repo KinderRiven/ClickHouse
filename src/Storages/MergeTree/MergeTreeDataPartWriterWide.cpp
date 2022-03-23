@@ -16,8 +16,8 @@ namespace
 {
     constexpr auto DATA_FILE_EXTENSION = ".bin";
     constexpr auto NEW_MARKS_FILE_EXTENSION = ".new_mrk";
-    constexpr auto MARK_RANGES_FILE_EXTENSION = ".mrs";
-    constexpr auto MAX_MARKS_IN_MARK_RANGE = 8;
+    constexpr auto SECTIONS_FILE_EXTENSION = ".sec";
+    constexpr auto MAX_BYTES_IN_SECTION = 2097152; // default: 4MB
 }
 
 namespace
@@ -128,7 +128,7 @@ void MergeTreeDataPartWriterWide::addStreams(const NameAndTypePair & column, con
             part_path + stream_name,
             NEW_MARKS_FILE_EXTENSION, // .new_mrk
             part_path + stream_name,
-            MARK_RANGES_FILE_EXTENSION, // .mrs
+            SECTIONS_FILE_EXTENSION, // .mrs
             compression_codec,
             settings.max_compress_block_size);
     };
@@ -273,10 +273,10 @@ void MergeTreeDataPartWriterWide::writeSingleMark(
     for (const auto & mark : marks)
     {
         Stream & stream = *column_streams[mark.stream_name];
-        stream.current_mrange_offset_in_compressed_file = mark.mark.offset_in_compressed_file;
+        stream.current_section_offset_in_compressed_file = mark.mark.offset_in_compressed_file;
         flushMarkToFile(mark, number_of_rows);
-        flushNewMarkToFile(getNewMarkAndTryFlushMarkRange(mark), mark, number_of_rows);
-        flushMarkRangeToFile(mark.stream_name);
+        flushNewMarkToFile(getNewMarkAndTryFlushSection(mark), mark, number_of_rows);
+        flushSectionToFile(mark.stream_name);
     }
 }
 
@@ -295,19 +295,19 @@ void MergeTreeDataPartWriterWide::flushMarkToFile(const StreamNameAndMark & stre
 void MergeTreeDataPartWriterWide::flushNewMarkToFile(
     const NewMarkInfo & info, const StreamNameAndMark & stream_with_mark, size_t rows_in_mark)
 {
-    /// ---------------------------------------------------------------------------------------------------------
-    /// | offset_in_file | offset_in_decompress_block | mark_range_id | offset_in_mark_range | num_rows_in_mark |
-    /// ---------------------------------------------------------------------------------------------------------
+    /// ---------------------------------------------------------------------------------------------------
+    /// | offset_in_file | offset_in_decompress_block | section_id | offset_in_section | num_rows_in_mark |
+    /// ---------------------------------------------------------------------------------------------------
     Stream & stream = *column_streams[stream_with_mark.stream_name];
     writeIntBinary(stream_with_mark.mark.offset_in_compressed_file, stream.new_marks);
     writeIntBinary(stream_with_mark.mark.offset_in_decompressed_block, stream.new_marks);
-    writeIntBinary(info.current_mark_range, stream.new_marks);
-    writeIntBinary(info.offset_in_mark_range, stream.new_marks);
+    writeIntBinary(info.section_id, stream.new_marks);
+    writeIntBinary(info.offset_in_section, stream.new_marks);
     if (settings.can_use_adaptive_granularity)
         writeIntBinary(rows_in_mark, stream.new_marks);
 }
 
-void MergeTreeDataPartWriterWide::flushMarkRangeToFile(const String & stream_name)
+void MergeTreeDataPartWriterWide::flushSectionToFile(const String & stream_name)
 {
     ///   ---------------
     /// 1 |     0 , 128 | <-- writeColumn
@@ -317,40 +317,36 @@ void MergeTreeDataPartWriterWide::flushMarkRangeToFile(const String & stream_nam
     /// 5 | 30018 ,   0 | <-- writeFinalMark
     ///   ---------------
     /// -----------------------------------------------
-    /// | compressed_offset | num_marks_in_mark_range |
+    /// | offset_compress_file | num_marks_in_section |
     /// -----------------------------------------------
     ///
     Stream & stream = *column_streams[stream_name];
-    writeIntBinary(stream.current_mrange_offset_in_compressed_file, stream.mark_ranges);
+    writeIntBinary(stream.current_section_offset_in_compressed_file, stream.sections);
     if (settings.can_use_adaptive_granularity)
-        writeIntBinary(stream.marks_written_in_last_mark_range, stream.mark_ranges);
+        writeIntBinary(stream.marks_written_in_last_section, stream.sections);
 
-    stream.marks_written_in_last_mark_range = 0;
-    stream.current_mark_range++;
+    stream.marks_written_in_last_section = 0;
+    stream.current_section_num++;
 }
 
-NewMarkInfo MergeTreeDataPartWriterWide::getNewMarkAndTryFlushMarkRange(const StreamNameAndMark & stream_with_mark)
+NewMarkInfo MergeTreeDataPartWriterWide::getNewMarkAndTryFlushSection(const StreamNameAndMark & stream_with_mark)
 {
     Stream & stream = *column_streams[stream_with_mark.stream_name];
-    if (stream.marks_written_in_last_mark_range >= MAX_MARKS_IN_MARK_RANGE)
+    size_t current_section_bytes = stream_with_mark.mark.offset_in_compressed_file - stream.current_section_offset_in_compressed_file;
+
+    /// To prevent a compressed block from being split, if offset_in_uncompress_block
+    /// is not 0, no slicing is performed.
+    if ((stream_with_mark.mark.offset_in_decompressed_block == 0) && (current_section_bytes >= MAX_BYTES_IN_SECTION))
     {
-        flushMarkRangeToFile(stream_with_mark.stream_name);
-        /// new mark offset is new mark_range offset
-        stream.current_mrange_offset_in_compressed_file = stream_with_mark.mark.offset_in_compressed_file;
+        flushSectionToFile(stream_with_mark.stream_name);
+        stream.current_section_offset_in_compressed_file = stream_with_mark.mark.offset_in_compressed_file;
     }
 
-    /// LOG_TRACE(
-    ///     trace_log,
-    ///     "[A][mark_range_info][mr_id:{}][mr_offset:{}][mrk_offset:{}]",
-    ///     stream.current_mark_range,
-    ///     stream.current_mrange_offset_in_compressed_file,
-    ///     stream_with_mark.mark.offset_in_compressed_file);
-
-    NewMarkInfo mark_info;
-    mark_info.current_mark_range = stream.current_mark_range;
-    mark_info.offset_in_mark_range = stream_with_mark.mark.offset_in_compressed_file - stream.current_mrange_offset_in_compressed_file;
-    stream.marks_written_in_last_mark_range++;
-    return mark_info;
+    NewMarkInfo info;
+    info.section_id = stream.current_section_num;
+    info.offset_in_section = stream_with_mark.mark.offset_in_compressed_file - stream.current_section_offset_in_compressed_file;
+    stream.marks_written_in_last_section++;
+    return info;
 }
 
 StreamsWithMarks MergeTreeDataPartWriterWide::getCurrentMarksForColumn(
@@ -470,10 +466,8 @@ void MergeTreeDataPartWriterWide::writeColumn(
             {
                 finished_granule++;
                 flushMarkToFile(mark, index_granularity.getMarkRows(granule.mark_number));
-
-                NewMarkInfo new_mark_info = getNewMarkAndTryFlushMarkRange(mark);
+                NewMarkInfo new_mark_info = getNewMarkAndTryFlushSection(mark);
                 /// maybe [1][2][..][36]
-                /// mark_range info
                 LOG_TRACE(trace_log, "[1][current_mark:{}]", finished_granule);
                 /// mark info
                 LOG_TRACE(
@@ -484,9 +478,9 @@ void MergeTreeDataPartWriterWide::writeColumn(
                 /// new mark info
                 LOG_TRACE(
                     trace_log,
-                    "[3][new_mark_info][mr_id:{}][offset_in_mark_range:{}]",
-                    new_mark_info.current_mark_range,
-                    new_mark_info.offset_in_mark_range);
+                    "[3][new_mark_info][section_id:{}][offset_in_section:{}]",
+                    new_mark_info.section_id,
+                    new_mark_info.offset_in_section);
                 flushNewMarkToFile(new_mark_info, mark, index_granularity.getMarkRows(granule.mark_number));
             }
             last_non_written_marks.erase(marks_it);
@@ -494,7 +488,6 @@ void MergeTreeDataPartWriterWide::writeColumn(
     }
     /// maybe print [36/37]
     LOG_TRACE(trace_log, "[finisehd_granule:{}/{}]", finished_granule, total_granule);
-    /// flushMarkRangeToFile(name);
 
     serializations[name]->enumerateStreams(
         [&](const ISerialization::SubstreamPath & substream_path) {
@@ -819,8 +812,8 @@ void MergeTreeDataPartWriterWide::adjustLastMarkIfNeedAndFlushToDisk(size_t new_
             for (const auto & mark : marks)
             {
                 flushMarkToFile(mark, index_granularity.getMarkRows(getCurrentMark()));
-                flushNewMarkToFile(getNewMarkAndTryFlushMarkRange(mark), mark, index_granularity.getMarkRows(getCurrentMark()));
-                flushMarkRangeToFile(mark.stream_name); /// Last mark thus we need to sync flush
+                flushNewMarkToFile(getNewMarkAndTryFlushSection(mark), mark, index_granularity.getMarkRows(getCurrentMark()));
+                flushSectionToFile(mark.stream_name); /// Last mark thus we need to sync flush section
             }
         }
 

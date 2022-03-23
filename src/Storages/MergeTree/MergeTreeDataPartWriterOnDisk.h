@@ -66,8 +66,8 @@ public:
             const std::string & marks_file_extension_,
             const std::string & new_marks_path_,
             const std::string & new_marks_file_extension_,
-            const std::string & mark_ranges_path_,
-            const std::string & mark_ranges_file_extension_,
+            const std::string & sections_path_,
+            const std::string & sections_file_extension_,
             const CompressionCodecPtr & compression_codec_,
             size_t max_compress_block_size_);
 
@@ -89,13 +89,12 @@ public:
         std::unique_ptr<WriteBufferFromFileBase> new_marks_file;
         HashingWriteBuffer new_marks;
 
-        /// mark_rangs -> mark_ranges_file
-        std::unique_ptr<WriteBufferFromFileBase> mark_ranges_file;
-        HashingWriteBuffer mark_ranges;
-        size_t marks_written_in_last_mark_range = 0;
-        size_t current_mark_range = 0;
-        size_t current_mrange_offset_in_compressed_file = 0;
-
+        /// sections -> sections_file
+        std::unique_ptr<WriteBufferFromFileBase> sections_file;
+        HashingWriteBuffer sections;
+        size_t current_section_num = 0;
+        size_t marks_written_in_last_section = 0;
+        size_t current_section_offset_in_compressed_file = 0;
 
         void finalize();
 

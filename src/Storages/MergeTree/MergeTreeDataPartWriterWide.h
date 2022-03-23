@@ -12,8 +12,8 @@ struct StreamNameAndMark
 
 struct NewMarkInfo
 {
-    size_t current_mark_range;
-    size_t offset_in_mark_range;
+    size_t section_id;
+    size_t offset_in_section;
 };
 
 using StreamsWithMarks = std::vector<StreamNameAndMark>;
@@ -38,7 +38,13 @@ public:
     void finish(IMergeTreeDataPart::Checksums & checksums, bool sync) final;
 
 private:
-    NewMarkInfo getNewMarkAndTryFlushMarkRange(const StreamNameAndMark & stream_with_mark);
+    NewMarkInfo getNewMarkAndTryFlushSection(const StreamNameAndMark & stream_with_mark);
+
+    /// Flush new mark to file (*.new_mrk)
+    void flushNewMarkToFile(const NewMarkInfo & info, const StreamNameAndMark & stream_with_mark, size_t rows_in_mark);
+
+    /// Try to flush section info to file (*.sec)
+    void flushSectionToFile(const String & stream_name);
 
     /// Finish serialization of data: write final mark if required and compute checksums
     /// Also validate written data in debug mode
@@ -65,12 +71,6 @@ private:
 
     /// Write mark to disk using stream and rows count
     void flushMarkToFile(const StreamNameAndMark & stream_with_mark, size_t rows_in_mark);
-
-    /// Flush new mark to file (*.new_mrk)
-    void flushNewMarkToFile(const NewMarkInfo & info, const StreamNameAndMark & stream_with_mark, size_t rows_in_mark);
-
-    /// Try to flush mark range info to file (*.mrs)
-    void flushMarkRangeToFile(const String & stream_name);
 
     /// Write mark for column taking offsets from column stream
     void writeSingleMark(
@@ -117,7 +117,7 @@ private:
     /// How many rows we have already written in the current mark.
     /// More than zero when incoming blocks are smaller then their granularity.
     size_t rows_written_in_last_mark = 0;
-    
+
     Poco::Logger * trace_log = &Poco::Logger::get("[NewMark]");
 };
 
