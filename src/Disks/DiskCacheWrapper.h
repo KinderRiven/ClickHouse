@@ -34,10 +34,8 @@ public:
     void moveFile(const String & from_path, const String & to_path) override;
     void replaceFile(const String & from_path, const String & to_path) override;
 
-    std::unique_ptr<ReadBufferFromFileBase> readFile(
-        const String & path,
-        const ReadSettings & settings,
-        std::optional<size_t> size) const override;
+    std::unique_ptr<ReadBufferFromFileBase>
+    readFile(const String & path, const ReadSettings & settings, std::optional<size_t> size) const override;
 
     std::unique_ptr<WriteBufferFromFileBase> writeFile(const String & path, size_t buf_size, WriteMode mode) override;
 

@@ -3,12 +3,12 @@
 #include <Compression/CompressedWriteBuffer.h>
 #include <Disks/IDisk.h>
 #include <IO/HashingWriteBuffer.h>
+#include <IO/SliceWriteBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteBufferFromFileBase.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/IMergeTreeDataPartWriter.h>
 #include <Storages/MergeTree/MergeTreeData.h>
-
 
 namespace DB
 {
@@ -80,6 +80,11 @@ public:
         HashingWriteBuffer plain_hashing;
         CompressedWriteBuffer compressed_buf;
         HashingWriteBuffer compressed;
+
+        /// slice -> slice file
+        std::shared_ptr<WriteBufferFromFileBase> slices_file;
+        HashingWriteBuffer slices_hashing;
+        SliceWriteBuffer slices;
 
         /// marks -> marks_file
         std::unique_ptr<WriteBufferFromFileBase> marks_file;

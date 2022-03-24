@@ -1,9 +1,9 @@
 #include "DiskCacheWrapper.h"
-#include <IO/copyData.h>
+#include <condition_variable>
 #include <IO/ReadBufferFromFileDecorator.h>
 #include <IO/WriteBufferFromFileDecorator.h>
+#include <IO/copyData.h>
 #include <Common/quoteString.h>
-#include <condition_variable>
 
 namespace DB
 {
@@ -14,7 +14,9 @@ class CompletionAwareWriteBuffer : public WriteBufferFromFileDecorator
 {
 public:
     CompletionAwareWriteBuffer(std::unique_ptr<WriteBufferFromFileBase> impl_, std::function<void()> completion_callback_)
-        : WriteBufferFromFileDecorator(std::move(impl_)), completion_callback(completion_callback_) { }
+        : WriteBufferFromFileDecorator(std::move(impl_)), completion_callback(completion_callback_)
+    {
+    }
 
     virtual ~CompletionAwareWriteBuffer() override
     {
@@ -71,14 +73,11 @@ std::shared_ptr<FileDownloadMetadata> DiskCacheWrapper::acquireDownloadMetadata(
     if (it != file_downloads.end() && !it->second.expired())
         return it->second.lock();
 
-    std::shared_ptr<FileDownloadMetadata> metadata(
-        new FileDownloadMetadata,
-        [this, path] (FileDownloadMetadata * p)
-        {
-            std::unique_lock<std::mutex> erase_lock{mutex};
-            file_downloads.erase(path);
-            delete p;
-        });
+    std::shared_ptr<FileDownloadMetadata> metadata(new FileDownloadMetadata, [this, path](FileDownloadMetadata * p) {
+        std::unique_lock<std::mutex> erase_lock{mutex};
+        file_downloads.erase(path);
+        delete p;
+    });
 
     file_downloads.emplace(path, metadata);
 
@@ -86,10 +85,7 @@ std::shared_ptr<FileDownloadMetadata> DiskCacheWrapper::acquireDownloadMetadata(
 }
 
 std::unique_ptr<ReadBufferFromFileBase>
-DiskCacheWrapper::readFile(
-    const String & path,
-    const ReadSettings & settings,
-    std::optional<size_t> size) const
+DiskCacheWrapper::readFile(const String & path, const ReadSettings & settings, std::optional<size_t> size) const
 {
     if (!cache_file_predicate(path))
         return DiskDecorator::readFile(path, settings, size);
@@ -160,8 +156,7 @@ DiskCacheWrapper::readFile(
     return DiskDecorator::readFile(path, settings, size);
 }
 
-std::unique_ptr<WriteBufferFromFileBase>
-DiskCacheWrapper::writeFile(const String & path, size_t buf_size, WriteMode mode)
+std::unique_ptr<WriteBufferFromFileBase> DiskCacheWrapper::writeFile(const String & path, size_t buf_size, WriteMode mode)
 {
     if (!cache_file_predicate(path))
         return DiskDecorator::writeFile(path, buf_size, mode);
@@ -172,16 +167,13 @@ DiskCacheWrapper::writeFile(const String & path, size_t buf_size, WriteMode mode
     if (!cache_disk->exists(dir_path))
         cache_disk->createDirectories(dir_path);
 
-    return std::make_unique<CompletionAwareWriteBuffer>(
-        cache_disk->writeFile(path, buf_size, mode),
-        [this, path, buf_size, mode]()
-        {
-            /// Copy file from cache to actual disk when cached buffer is finalized.
-            auto src_buffer = cache_disk->readFile(path, ReadSettings(), /* size= */ {});
-            auto dst_buffer = DiskDecorator::writeFile(path, buf_size, mode);
-            copyData(*src_buffer, *dst_buffer);
-            dst_buffer->finalize();
-        });
+    return std::make_unique<CompletionAwareWriteBuffer>(cache_disk->writeFile(path, buf_size, mode), [this, path, buf_size, mode]() {
+        /// Copy file from cache to actual disk when cached buffer is finalized.
+        auto src_buffer = cache_disk->readFile(path, ReadSettings(), /* size= */ {});
+        auto dst_buffer = DiskDecorator::writeFile(path, buf_size, mode);
+        copyData(*src_buffer, *dst_buffer);
+        dst_buffer->finalize();
+    });
 }
 
 void DiskCacheWrapper::clearDirectory(const String & path)

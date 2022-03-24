@@ -11,25 +11,33 @@ namespace ErrorCodes
 
 void MergeTreeDataPartWriterOnDisk::Stream::finalize()
 {
-    compressed.next();
     /// 'compressed_buf' doesn't call next() on underlying buffer ('plain_hashing'). We should do it manually.
+    /// compressed.next();
+
+    /// slice.finalized()
+    /// | - compressed.next()
+    /// | - write slice info to slice_file (using slice_hashing)
+    slices.finalize();
+
     plain_hashing.next();
-    marks.next();
-    new_marks.next(); // new mark
+    marks.next(); // mark2
+    new_marks.next(); // new_mark
     sections.next(); // section
 
-    plain_file->finalize();
-    marks_file->finalize();
-    new_marks_file->finalize(); // new mark
-    sections_file->finalize(); // section
+    plain_file->finalize(); // .bin
+    marks_file->finalize(); // .mark2
+    new_marks_file->finalize(); // .new_mark
+    sections_file->finalize(); // .section
+    slices_file->finalize(); // .slice
 }
 
 void MergeTreeDataPartWriterOnDisk::Stream::sync() const
 {
-    plain_file->sync();
-    marks_file->sync();
-    new_marks_file->sync(); // new mark
-    sections_file->sync(); // section
+    plain_file->sync(); // .bin
+    marks_file->sync(); // .mrk2
+    new_marks_file->sync(); // .new_mark
+    sections_file->sync(); // .section
+    slices_file->sync(); // .slice
 }
 
 MergeTreeDataPartWriterOnDisk::Stream::Stream(
@@ -48,6 +56,9 @@ MergeTreeDataPartWriterOnDisk::Stream::Stream(
     , plain_hashing(*plain_file)
     , compressed_buf(plain_hashing, compression_codec_, max_compress_block_size_)
     , compressed(compressed_buf)
+    , slices_file(disk_->writeFile(data_path_ + data_file_extension + ".slice", 4096, WriteMode::Rewrite))
+    , slices_hashing(*slices_file)
+    , slices(std::move(&slices_hashing), std::move(&compressed), std::move(&plain_hashing))
     , marks_file(disk_->writeFile(marks_path_ + marks_file_extension, 4096, WriteMode::Rewrite))
     , marks(*marks_file)
     , new_marks_file(disk_->writeFile(marks_path_ + ".new_mrk", 4096, WriteMode::Rewrite))
@@ -77,6 +88,9 @@ MergeTreeDataPartWriterOnDisk::Stream::Stream(
     , plain_hashing(*plain_file)
     , compressed_buf(plain_hashing, compression_codec_, max_compress_block_size_)
     , compressed(compressed_buf)
+    , slices_file(disk_->writeFile(data_path_ + data_file_extension + ".slice", 4096, WriteMode::Rewrite))
+    , slices_hashing(*slices_file)
+    , slices(std::move(&slices_hashing), std::move(&compressed), std::move(&plain_hashing))
     , marks_file(disk_->writeFile(marks_path_ + marks_file_extension, 4096, WriteMode::Rewrite))
     , marks(*marks_file)
     , new_marks_file(disk_->writeFile(new_marks_path_ + new_marks_file_extension_, 4096, WriteMode::Rewrite))
@@ -95,6 +109,12 @@ void MergeTreeDataPartWriterOnDisk::Stream::addToChecksums(MergeTreeData::DataPa
     checksums.files[name + data_file_extension].uncompressed_hash = compressed.getHash();
     checksums.files[name + data_file_extension].file_size = plain_hashing.count();
     checksums.files[name + data_file_extension].file_hash = plain_hashing.getHash();
+
+    checksums.files[name + data_file_extension].file_size = plain_hashing.count();
+    checksums.files[name + data_file_extension].file_hash = plain_hashing.getHash();
+
+    checksums.files[name + data_file_extension + ".slice"].file_size = slices_hashing.count(); /// .slice
+    checksums.files[name + data_file_extension + ".slice"].file_hash = slices_hashing.getHash();
 
     checksums.files[name + marks_file_extension].file_size = marks.count();
     checksums.files[name + marks_file_extension].file_hash = marks.getHash();

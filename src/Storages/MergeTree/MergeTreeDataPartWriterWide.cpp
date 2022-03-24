@@ -150,7 +150,7 @@ MergeTreeDataPartWriterWide::createStreamGetter(const NameAndTypePair & column, 
         if (is_offsets && offset_columns.count(stream_name))
             return nullptr;
 
-        return &column_streams.at(stream_name)->compressed;
+        return &column_streams.at(stream_name)->slices;
     };
 }
 
@@ -403,7 +403,7 @@ void MergeTreeDataPartWriterWide::writeSingleGranule(
             if (is_offsets && offset_columns.count(stream_name))
                 return;
 
-            column_streams[stream_name]->compressed.nextIfAtEnd();
+            column_streams[stream_name]->slices.nextIfAtEnd();
         },
         serialize_settings.path);
 }
