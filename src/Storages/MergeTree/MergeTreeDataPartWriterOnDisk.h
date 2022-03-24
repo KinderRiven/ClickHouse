@@ -57,20 +57,6 @@ public:
             const CompressionCodecPtr & compression_codec_,
             size_t max_compress_block_size_);
 
-        Stream(
-            const String & escaped_column_name_,
-            DiskPtr disk_,
-            const String & data_path_,
-            const std::string & data_file_extension_,
-            const std::string & marks_path_,
-            const std::string & marks_file_extension_,
-            const std::string & new_marks_path_,
-            const std::string & new_marks_file_extension_,
-            const std::string & sections_path_,
-            const std::string & sections_file_extension_,
-            const CompressionCodecPtr & compression_codec_,
-            size_t max_compress_block_size_);
-
         String escaped_column_name;
         std::string data_file_extension;
         std::string marks_file_extension;
@@ -89,17 +75,6 @@ public:
         /// marks -> marks_file
         std::unique_ptr<WriteBufferFromFileBase> marks_file;
         HashingWriteBuffer marks;
-
-        /// new_marks -> new_marks_file
-        std::unique_ptr<WriteBufferFromFileBase> new_marks_file;
-        HashingWriteBuffer new_marks;
-
-        /// sections -> sections_file
-        std::unique_ptr<WriteBufferFromFileBase> sections_file;
-        HashingWriteBuffer sections;
-        size_t current_section_num = 0;
-        size_t marks_written_in_last_section = 0;
-        size_t current_section_offset_in_compressed_file = 0;
 
         void finalize();
 

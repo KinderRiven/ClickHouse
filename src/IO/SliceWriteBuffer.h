@@ -131,7 +131,7 @@ private:
 
     WriteBuffer * compressed_file_buffer;
 
-    Poco::Logger * trace_log = &Poco::Logger::get("[slice]");
+    Poco::Logger * trace_log = &Poco::Logger::get("[slice_write]");
 };
 
 };
