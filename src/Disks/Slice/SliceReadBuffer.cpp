@@ -22,11 +22,12 @@ SliceReadBuffer::SliceReadBuffer(
         LOG_TRACE(
             trace_log,
             "[slices_id:{}][num_block:{}][uncompressed_size:{}][compressed_size:{}][offset:{}]",
-            i++,
+            i,
             tmp_slice.num_blocks,
             tmp_slice.uncompressed_size,
             tmp_slice.compressed_size,
             tmp_slice.offset_in_compressed_file);
+        i++;
     }
     swap(*remote_data_file);
 }

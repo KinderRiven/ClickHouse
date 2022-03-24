@@ -89,7 +89,22 @@ std::unique_ptr<ReadBufferFromFileBase>
 DiskCacheWrapper::readFile(const String & path, const ReadSettings & settings, std::optional<size_t> size) const
 {
     if (!cache_file_predicate(path))
-        return DiskDecorator::readFile(path, settings, size);
+    {
+        String slice_path = path + ".slice";
+        /// We assume that slice file must be cache in local disk.
+        if (cache_disk->exists(slice_path))
+        {
+            LOG_TRACE(log, "[{}] is slice file, so we create slicereadbuffer.", slice_path);
+            return std::make_unique<SliceReadBuffer>(
+                cache_disk->readFile(slice_path, settings, size), cache_disk, nullptr, DiskDecorator::readFile(path, settings, size));
+        }
+        else
+        {
+            LOG_TRACE(log, "[{}] is not slice file, thus we create normal buffer.", slice_path);
+            /// Maybe, it is a data file (*.bin), we need to check whether it has slice file (*.slice).
+            return DiskDecorator::readFile(path, settings, size);
+        }
+    }
 
     LOG_DEBUG(log, "Read file {} from cache", backQuote(path));
 
@@ -154,20 +169,7 @@ DiskCacheWrapper::readFile(const String & path, const ReadSettings & settings, s
     if (metadata->status == DOWNLOADED)
         return cache_disk->readFile(path, settings, size);
 
-    String slice_path = path + ".slice";
-    /// We assume that slice file must be cache in local disk.
-    if (cache_disk->exists(slice_path))
-    {
-        LOG_TRACE(log, "[{}] is slice file, so we create slicereadbuffer.", slice_path);
-        return std::make_unique<SliceReadBuffer>(
-            cache_disk->readFile(path, settings, size), cache_disk, nullptr, DiskDecorator::readFile(path, settings, size));
-    }
-    else
-    {
-        LOG_TRACE(log, "[{}] is not slice file, thus we create normal buffer.", slice_path);
-        /// Maybe, it is a data file (*.bin), we need to check whether it has slice file (*.slice).
-        return DiskDecorator::readFile(path, settings, size);
-    }
+    return DiskDecorator::readFile(path, settings, size);
 }
 
 std::unique_ptr<WriteBufferFromFileBase> DiskCacheWrapper::writeFile(const String & path, size_t buf_size, WriteMode mode)
