@@ -1,4 +1,5 @@
 #include "SliceReadBuffer.h"
+#include <IO/copyData.h>
 #include <Common/Exception.h>
 #include "SliceManagement.h"
 
@@ -7,13 +8,17 @@ namespace DB
 
 SliceReadBuffer::SliceReadBuffer(
     std::unique_ptr<ReadBufferFromFileBase> slice_file_,
-    std::shared_ptr<IDisk> local_cache_,
+    std::shared_ptr<DiskLocal> local_cache_,
     std::shared_ptr<IDisk> remote_cache_,
-    std::unique_ptr<ReadBufferFromFileBase> remote_data_file_)
+    std::unique_ptr<ReadBufferFromFileBase> remote_data_file_,
+    const ReadSettings & settings_,
+    std::optional<size_t> size_)
     : slice_file(std::move(slice_file_))
     , local_cache(std::move(local_cache_))
     , remote_cache(std::move(remote_cache_))
     , remote_data_file(std::move(remote_data_file_))
+    , read_settings(settings_)
+    , read_size(size_)
 {
     int i = 0;
     Slice tmp_slice;
@@ -39,8 +44,10 @@ SliceReadBuffer::SliceReadBuffer(
 String SliceReadBuffer::getSliceName(const String & path, int slice_id)
 {
     String slice_name = path + ".slice" + "_" + std::to_string(slice_id);
-    for(size_t i = 0; i < slice_name.length(); i++) {
-        if (slice_name[i] == '/') {
+    for (size_t i = 0; i < slice_name.length(); i++)
+    {
+        if (slice_name[i] == '/')
+        {
             slice_name[i] = '_';
         }
     }
@@ -64,17 +71,62 @@ int SliceReadBuffer::getSliceFromOffset(off_t off)
 }
 
 
+void SliceReadBuffer::downloadSliceFile(const String & path, int slice_id)
+{
+    String tmp_path = path + ".tmp";
+    auto writer = local_cache->writeFile(tmp_path, read_settings.local_fs_buffer_size, WriteMode::Rewrite);
+
+    off_t old_off = remote_data_file->getPosition();
+    LOG_TRACE(
+        trace_log,
+        "[download_slice_file][start][slice_id:{}][slice_offset:{}][slice_size:{}][path:{}][current_offset:{}]",
+        slice_id,
+        vec_slice[slice_id].offset_in_compressed_file,
+        vec_slice[slice_id].compressed_size,
+        path,
+        old_off);
+
+    remote_data_file->seek(static_cast<off_t>(vec_slice[slice_id].offset_in_compressed_file), SEEK_SET);
+    copyData(*remote_data_file, *writer, vec_slice[slice_id].compressed_size);
+    local_cache->moveFile(tmp_path, path); /// atomic
+
+    remote_data_file->seek(old_off, SEEK_SET);
+    old_off = remote_data_file->getPosition();
+    LOG_TRACE(
+        trace_log,
+        "[download_slice_file][end][slice_id:{}][slice_offset:{}][slice_size:{}][path:{}][current_offset:{}]",
+        slice_id,
+        vec_slice[slice_id].offset_in_compressed_file,
+        vec_slice[slice_id].compressed_size,
+        path,
+        old_off);
+}
+
+
 off_t SliceReadBuffer::switchToSlice(int slice_id, off_t off)
 {
-    /// 1.TODO check slice_map<slice_id, file>
-    /// 2.TODO donwnload slice file
-    /// 3.TODO switch to new slice file
+    /// 1.generate slice key
     current_slice = slice_id;
     String file_name = remote_data_file->getFileName();
     String slice_name = getSliceName(file_name, current_slice);
+    String slice_path = "slice/" + slice_name;
+
+    /// 2.acquire lock from SliceMangement
     auto metadata = SliceManagement::instance().acquireDownloadSlice(slice_name);
     metadata->mutex.lock();
-    LOG_TRACE(trace_log, "[switch][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
+    if (metadata->status == SliceManagement::SliceDownloadStatus::DOWNLOADED)
+    {
+        /// A thread may have loaded this slice.
+        LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
+    }
+    else
+    {
+        /// TODO download slice file
+        LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
+        /// downloadSliceFile(slice_path, current_slice);
+        metadata->status = SliceManagement::SliceDownloadStatus::DOWNLOADED;
+    }
+    /// slice_map[slice_id] = local_cache->readFile(slice_path, read_settings, read_size);
     metadata->mutex.unlock();
     return off;
 }
@@ -91,7 +143,15 @@ off_t SliceReadBuffer::getPosition()
 
 off_t SliceReadBuffer::seek(off_t off, int whence)
 {
-    offset_in_compressed_file = off;
+    swap(*remote_data_file);
+    if (whence == SEEK_SET)
+    {
+        offset_in_compressed_file = off;
+    }
+    else if (whence == SEEK_CUR)
+    {
+        offset_in_compressed_file += off;
+    }
     int new_slice_id = getSliceFromOffset(offset_in_compressed_file);
     /// There is no matching slice. It may be switched to an offset exceeding the file size.
     if (new_slice_id == -1)
@@ -103,8 +163,6 @@ off_t SliceReadBuffer::seek(off_t off, int whence)
     {
         switchToSlice(new_slice_id, offset_in_compressed_file);
     }
-
-    swap(*remote_data_file);
     auto result = remote_data_file->seek(off, whence);
     swap(*remote_data_file);
     return result;
@@ -114,6 +172,7 @@ off_t SliceReadBuffer::seek(off_t off, int whence)
 bool SliceReadBuffer::nextImpl()
 {
     offset_in_compressed_file += offset();
+    swap(*remote_data_file);
     ///
     /// When running here, we may perform the operation of moving the pointer such as
     /// seek(), thus we need to judge whether we need to switch the partition every time.
@@ -134,8 +193,6 @@ bool SliceReadBuffer::nextImpl()
     {
         switchToSlice(new_slice_id, offset_in_compressed_file);
     }
-
-    swap(*remote_data_file);
     auto result = remote_data_file->next();
     swap(*remote_data_file);
     return result;

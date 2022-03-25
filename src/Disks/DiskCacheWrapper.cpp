@@ -110,7 +110,12 @@ DiskCacheWrapper::readFile(const String & path, const ReadSettings & settings, s
         {
             LOG_TRACE(log, "[{}] is slice file, so we create slicereadbuffer.", slice_path);
             return std::make_unique<SliceReadBuffer>(
-                cache_disk->readFile(slice_path, settings, size), cache_disk, nullptr, DiskDecorator::readFile(path, settings, size));
+                cache_disk->readFile(slice_path, settings, size),
+                cache_disk,
+                nullptr,
+                DiskDecorator::readFile(path, settings, size),
+                settings,
+                size);
         }
         else
         {

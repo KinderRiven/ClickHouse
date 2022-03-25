@@ -1,7 +1,9 @@
 #pragma once
 
+#include <Disks/DiskLocal.h>
 #include <Disks/IDisk.h>
 #include <IO/ReadBufferFromFileBase.h>
+#include <IO/ReadSettings.h>
 #include <base/logger_useful.h>
 #include "SliceManagement.h"
 
@@ -44,9 +46,11 @@ public:
     ///
     SliceReadBuffer(
         std::unique_ptr<ReadBufferFromFileBase> slice_file,
-        std::shared_ptr<IDisk> local_cache,
+        std::shared_ptr<DiskLocal> local_cache,
         std::shared_ptr<IDisk> remote_cache,
-        std::unique_ptr<ReadBufferFromFileBase> remote_file);
+        std::unique_ptr<ReadBufferFromFileBase> remote_file,
+        const ReadSettings & settings,
+        std::optional<size_t> size);
 
     std::string getFileName() const override { return remote_data_file->getFileName(); }
 
@@ -63,6 +67,8 @@ private:
 
     off_t switchToSlice(int slice_id, off_t off);
 
+    void downloadSliceFile(const String & path, int slice_id);
+
 private:
     int current_slice = -1;
 
@@ -70,7 +76,7 @@ private:
 
     std::unique_ptr<ReadBufferFromFileBase> slice_file;
 
-    std::shared_ptr<IDisk> local_cache;
+    std::shared_ptr<DiskLocal> local_cache;
 
     std::shared_ptr<IDisk> remote_cache;
 
@@ -78,7 +84,11 @@ private:
 
     std::vector<Slice> vec_slice;
 
-    std::unordered_map<size_t, std::unique_ptr<ReadBufferFromFileBase>> slice_map;
+    std::unordered_map<int, std::unique_ptr<ReadBufferFromFileBase>> slice_map;
+
+    ReadSettings read_settings;
+
+    std::optional<size_t> read_size;
 
     Poco::Logger * trace_log = &Poco::Logger::get("[slice_read]");
 };
