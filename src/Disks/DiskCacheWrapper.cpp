@@ -64,6 +64,20 @@ DiskCacheWrapper::DiskCacheWrapper(
     std::shared_ptr<IDisk> delegate_, std::shared_ptr<DiskLocal> cache_disk_, std::function<bool(const String &)> cache_file_predicate_)
     : DiskDecorator(delegate_), cache_disk(cache_disk_), cache_file_predicate(cache_file_predicate_)
 {
+    /// ---------------------------------------------
+    /// | create slice path to store bin file slice |
+    /// ---------------------------------------------
+    /// |- disks
+    ///     | - s3
+    ///         | - cache
+    ///             | - store [metadata file]
+    ///             | - slice [slice file]
+    ///         | - store
+    /// ----------------------------------------------
+    if (!cache_disk->exists("slice"))
+    {
+        cache_disk->createDirectory("slice");
+    }
 }
 
 std::shared_ptr<FileDownloadMetadata> DiskCacheWrapper::acquireDownloadMetadata(const String & path) const

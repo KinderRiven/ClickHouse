@@ -210,8 +210,7 @@ void registerDiskS3(DiskFactory & factory)
             auto cache_file_predicate = [](const String & path) {
                 return path.ends_with("idx") // index files.
                     || path.ends_with("mrk") || path.ends_with("mrk2") || path.ends_with("mrk3") // mark files.
-                    || path.ends_with("txt") || path.ends_with("dat") || path.ends_with("new_mrk") || path.ends_with("sec")
-                    || path.ends_with("slice");
+                    || path.ends_with("txt") || path.ends_with("dat") || path.ends_with("slice");
             };
 
             s3disk = std::make_shared<DiskCacheWrapper>(s3disk, cache_disk, cache_file_predicate);

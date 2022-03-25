@@ -3,6 +3,7 @@
 #include <Disks/IDisk.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <base/logger_useful.h>
+#include "SliceManagement.h"
 
 namespace DB
 {
@@ -56,6 +57,17 @@ public:
     bool nextImpl() override;
 
 private:
+    String getSliceName(const String & path, int slice_id);
+
+    int getSliceFromOffset(off_t off);
+
+    off_t switchToSlice(int slice_id, off_t off);
+
+private:
+    int current_slice = -1;
+
+    off_t offset_in_compressed_file = 0;
+
     std::unique_ptr<ReadBufferFromFileBase> slice_file;
 
     std::shared_ptr<IDisk> local_cache;
@@ -65,6 +77,8 @@ private:
     std::unique_ptr<ReadBufferFromFileBase> remote_data_file;
 
     std::vector<Slice> vec_slice;
+
+    std::unordered_map<size_t, std::unique_ptr<ReadBufferFromFileBase>> slice_map;
 
     Poco::Logger * trace_log = &Poco::Logger::get("[slice_read]");
 };
