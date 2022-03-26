@@ -84,7 +84,7 @@ private:
 
     std::vector<Slice> vec_slice;
 
-    std::unordered_map<int, std::unique_ptr<ReadBufferFromFileBase>> slice_map;
+    std::unique_ptr<ReadBufferFromFileBase> current_slice_file;
 
     ReadSettings read_settings;
 
