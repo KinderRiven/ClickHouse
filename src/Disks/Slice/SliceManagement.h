@@ -3,6 +3,9 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <Disks/IDisk.h>
+#include <IO/ReadBufferFromFileBase.h>
+#include <IO/WriteBufferFromFileBase.h>
 #include <base/logger_useful.h>
 
 namespace DB
@@ -29,6 +32,14 @@ public:
 public:
     static SliceManagement & instance();
 
+    void setupRemoteCacheDisk(std::shared_ptr<IDisk> remote_disk);
+
+    std::unique_ptr<WriteBufferFromFileBase>
+    createRemoteFileToUpload(const String & key, size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE, WriteMode mode = WriteMode::Rewrite);
+
+    std::unique_ptr<ReadBufferFromFileBase>
+    tryToReadSliceFromRemote(const String & key, const ReadSettings & settings = ReadSettings{}, std::optional<size_t> size = {});
+
     std::shared_ptr<SliceManagement::SliceDownloadMetadata> acquireDownloadSlice(const std::string & path);
 
 private:
@@ -40,5 +51,9 @@ private:
 
     /// Protects concurrent downloading files to cache.
     mutable std::mutex mutex;
+
+    std::shared_ptr<IDisk> remote_disk;
+
+    Poco::Logger * log = &Poco::Logger::get("[SliceManagement]");
 };
 };

@@ -21,24 +21,21 @@ public:
     DiskSelector(const Poco::Util::AbstractConfiguration & config, const String & config_prefix, ContextPtr context);
     DiskSelector(const DiskSelector & from) : disks(from.disks) { }
 
-    DiskSelectorPtr updateFromConfig(
-        const Poco::Util::AbstractConfiguration & config,
-        const String & config_prefix,
-        ContextPtr context
-    ) const;
+    DiskSelectorPtr
+    updateFromConfig(const Poco::Util::AbstractConfiguration & config, const String & config_prefix, ContextPtr context) const;
 
     /// Get disk by name
     DiskPtr get(const String & name) const;
 
     /// Get all disks with names
     const DisksMap & getDisksMap() const { return disks; }
-    void addToDiskMap(const String & name, DiskPtr disk)
-    {
-        disks.emplace(name, disk);
-    }
+    const DisksMap & getCacheDisksMap() const { return cache_disks; }
+    void addToDiskMap(const String & name, DiskPtr disk) { disks.emplace(name, disk); }
+    void addToCacheDiskMap(const String & name, DiskPtr disk) { cache_disks.emplace(name, disk); }
 
 private:
     DisksMap disks;
+    DisksMap cache_disks;
 };
 
 }

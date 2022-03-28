@@ -1,11 +1,12 @@
-#include "DiskLocal.h"
 #include "DiskSelector.h"
+#include "DiskLocal.h"
 
+#include <Disks/Slice/SliceManagement.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
+#include <base/logger_useful.h>
 #include <Common/escapeForFileName.h>
 #include <Common/quoteString.h>
-#include <base/logger_useful.h>
-#include <Interpreters/Context.h>
 
 #include <set>
 
@@ -36,16 +37,24 @@ DiskSelector::DiskSelector(const Poco::Util::AbstractConfiguration & config, con
             has_default_disk = true;
 
         auto disk_config_prefix = config_prefix + "." + disk_name;
-
-        disks.emplace(disk_name, factory.create(disk_name, config, disk_config_prefix, context, disks));
+        auto disk_ptr = factory.create(disk_name, config, disk_config_prefix, context, disks);
+        if (disk_ptr->getType() == DiskType::KV_S3)
+        {
+            cache_disks.emplace(disk_name, disk_ptr);
+            SliceManagement::instance().setupRemoteCacheDisk(disk_ptr);
+        }
+        else
+        {
+            disks.emplace(disk_name, disk_ptr);
+        }
     }
     if (!has_default_disk)
         disks.emplace(default_disk_name, std::make_shared<DiskLocal>(default_disk_name, context->getPath(), 0));
 }
 
 
-DiskSelectorPtr DiskSelector::updateFromConfig(
-    const Poco::Util::AbstractConfiguration & config, const String & config_prefix, ContextPtr context) const
+DiskSelectorPtr
+DiskSelector::updateFromConfig(const Poco::Util::AbstractConfiguration & config, const String & config_prefix, ContextPtr context) const
 {
     Poco::Util::AbstractConfiguration::Keys keys;
     config.keys(config_prefix, keys);
@@ -55,7 +64,7 @@ DiskSelectorPtr DiskSelector::updateFromConfig(
     std::shared_ptr<DiskSelector> result = std::make_shared<DiskSelector>(*this);
 
     constexpr auto default_disk_name = "default";
-    DisksMap old_disks_minus_new_disks (result->getDisksMap());
+    DisksMap old_disks_minus_new_disks(result->getDisksMap());
 
     for (const auto & disk_name : keys)
     {
@@ -63,7 +72,7 @@ DiskSelectorPtr DiskSelector::updateFromConfig(
             throw Exception("Disk name can contain only alphanumeric and '_' (" + disk_name + ")", ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG);
 
         auto disk_config_prefix = config_prefix + "." + disk_name;
-        if (result->getDisksMap().count(disk_name) == 0)
+        if ((result->getDisksMap().count(disk_name) == 0) && (result->getCacheDisksMap().count(disk_name) == 0))
         {
             result->addToDiskMap(disk_name, factory.create(disk_name, config, disk_config_prefix, context, result->getDisksMap()));
         }

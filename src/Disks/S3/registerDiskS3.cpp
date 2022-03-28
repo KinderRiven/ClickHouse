@@ -10,6 +10,7 @@
 
 #    include <IO/S3Common.h>
 #    include <aws/core/client/DefaultRetryStrategy.h>
+#    include "DiskKVS3.h"
 #    include "DiskS3.h"
 #    include "Disks/DiskCacheWrapper.h"
 #    include "Disks/DiskRestartProxy.h"
@@ -221,11 +222,36 @@ void registerDiskS3(DiskFactory & factory)
     factory.registerDiskType("s3", creator);
 }
 
+
+void registerDiskKVS3(DiskFactory & factory)
+{
+    auto creator = [](const String & name,
+                      const Poco::Util::AbstractConfiguration & config,
+                      const String & config_prefix,
+                      ContextPtr context,
+                      const DisksMap & /*map*/) -> DiskPtr {
+        S3::URI uri(Poco::URI(config.getString(config_prefix + ".endpoint")));
+        if (uri.key.back() != '/')
+            throw Exception("S3 path must ends with '/', but '" + uri.key + "' doesn't.", ErrorCodes::BAD_ARGUMENTS);
+
+        std::shared_ptr<IDisk> s3disk
+            = std::make_shared<DiskKVS3>(name, uri.bucket, uri.key, context, getSettings(config, config_prefix, context), getSettings);
+
+        s3disk->startup();
+        return std::make_shared<DiskRestartProxy>(s3disk);
+    };
+    factory.registerDiskType("kv_s3", creator);
+}
+
 }
 
 #else
 
 void registerDiskS3(DiskFactory &)
+{
+}
+
+void registerDiskDirectS3(DiskFactory & factory)
 {
 }
 

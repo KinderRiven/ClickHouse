@@ -69,6 +69,8 @@ private:
 
     void downloadSliceFile(const String & path, int slice_id);
 
+    void uploadSliceFile(const String & local_path, const String & remote_path);
+
 private:
     int current_slice = -1;
 

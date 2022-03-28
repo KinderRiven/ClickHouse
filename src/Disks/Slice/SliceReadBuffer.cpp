@@ -129,6 +129,22 @@ void SliceReadBuffer::downloadSliceFile(const String & path, int slice_id)
 }
 
 
+void SliceReadBuffer::uploadSliceFile(const String & local_path, const String & remote_path)
+{
+    LOG_TRACE(trace_log, "[upload][local_file:{}][remote_path:{}]", local_path, remote_path);
+    auto remote_file = SliceManagement::instance().createRemoteFileToUpload(remote_path);
+    if (remote_file != nullptr)
+    {
+        auto local_file = local_cache->readFile(local_path, read_settings, read_size);
+        copyData(*local_file, *remote_file);
+    }
+    else
+    {
+        LOG_TRACE(trace_log, "[upload] Cannot get remote file to write.");
+    }
+}
+
+
 off_t SliceReadBuffer::switchToSlice(int slice_id, off_t off)
 {
     /// 1.generate slice key
@@ -145,24 +161,55 @@ off_t SliceReadBuffer::switchToSlice(int slice_id, off_t off)
     }
     else
     {
-        /// 2.acquire lock from SliceMangement
-        auto metadata = SliceManagement::instance().acquireDownloadSlice(slice_name);
-        metadata->mutex.lock();
-        if (metadata->status == SliceManagement::SliceDownloadStatus::DOWNLOADED)
+        auto remote_slice_file = SliceManagement::instance().tryToReadSliceFromRemote(slice_name, read_settings, read_size);
+        if (remote_slice_file != nullptr)
         {
-            /// A thread may have loaded this slice.
-            LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
+            /// 2.acquire lock from SliceMangement
+            auto metadata = SliceManagement::instance().acquireDownloadSlice(slice_name);
+            metadata->mutex.lock();
+            if (metadata->status == SliceManagement::SliceDownloadStatus::DOWNLOADED)
+            {
+                /// A thread may have loaded this slice.
+                LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
+            }
+            else
+            {
+                /// TODO download slice file
+                LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
+                {
+                    String tmp_path = slice_path + ".tmp";
+                    auto writer = local_cache->writeFile(tmp_path, read_settings.local_fs_buffer_size, WriteMode::Rewrite);
+                    copyData(*remote_slice_file, *writer);
+                    local_cache->moveFile(tmp_path, slice_path); /// atomic
+                }
+                metadata->status = SliceManagement::SliceDownloadStatus::DOWNLOADED;
+            }
+            LOG_TRACE(trace_log, "[switch][readFile][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
+            current_slice_file = local_cache->readFile(slice_path, read_settings, read_size);
+            metadata->mutex.unlock();
         }
         else
         {
-            /// TODO download slice file
-            LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
-            downloadSliceFile(slice_path, current_slice);
-            metadata->status = SliceManagement::SliceDownloadStatus::DOWNLOADED;
+            /// 2.acquire lock from SliceMangement
+            auto metadata = SliceManagement::instance().acquireDownloadSlice(slice_name);
+            metadata->mutex.lock();
+            if (metadata->status == SliceManagement::SliceDownloadStatus::DOWNLOADED)
+            {
+                /// A thread may have loaded this slice.
+                LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
+            }
+            else
+            {
+                /// TODO download slice file
+                LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
+                downloadSliceFile(slice_path, current_slice);
+                uploadSliceFile(slice_path, slice_name);
+                metadata->status = SliceManagement::SliceDownloadStatus::DOWNLOADED;
+            }
+            LOG_TRACE(trace_log, "[switch][readFile][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
+            current_slice_file = local_cache->readFile(slice_path, read_settings, read_size);
+            metadata->mutex.unlock();
         }
-        LOG_TRACE(trace_log, "[switch][readFile][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
-        current_slice_file = local_cache->readFile(slice_path, read_settings, read_size);
-        metadata->mutex.unlock();
     }
     /// important !!!
     swap(*current_slice_file);

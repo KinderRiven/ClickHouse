@@ -13,6 +13,7 @@ enum class DiskType
     HDFS,
     Encrypted,
     WebServer,
+    KV_S3,
 };
 
 inline String toString(DiskType disk_type)
@@ -31,6 +32,8 @@ inline String toString(DiskType disk_type)
             return "encrypted";
         case DiskType::WebServer:
             return "web";
+        case DiskType::KV_S3:
+            return "kv_s3";
     }
     __builtin_unreachable();
 }
