@@ -139,6 +139,7 @@ off_t SliceReadBuffer::switchToSlice(int slice_id, off_t off)
 
     if (local_cache->exists(slice_path))
     {
+        /// 1. direct read cache file
         current_slice_file = local_cache->readFile(slice_path, read_settings, read_size);
         LOG_TRACE(trace_log, "[switch][exists][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
     }

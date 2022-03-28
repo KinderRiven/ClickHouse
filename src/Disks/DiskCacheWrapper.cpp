@@ -76,7 +76,7 @@ DiskCacheWrapper::DiskCacheWrapper(
     /// ----------------------------------------------
     if (!cache_disk->exists("slice"))
     {
-        cache_disk->createDirectory("slice");
+        cache_disk->createDirectories("slice");
     }
 }
 
