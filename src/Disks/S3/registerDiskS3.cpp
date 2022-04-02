@@ -203,18 +203,20 @@ void registerDiskS3(DiskFactory & factory)
         if (cache_enabled)
         {
             String cache_path = config.getString(config_prefix + ".cache_path", context->getPath() + "disks/" + name + "/cache/");
+            String slice_cache_path = config.getString(config_prefix + ".cache_path", context->getPath() + "disks/" + name + "/slice/");
 
             if (metadata_path == cache_path)
                 throw Exception("Metadata and cache path should be different: " + metadata_path, ErrorCodes::BAD_ARGUMENTS);
 
             auto cache_disk = std::make_shared<DiskLocal>("s3-cache", cache_path, 0);
+            auto slice_cache_disk = std::make_shared<DiskLocal>("s3-slice-cache", slice_cache_path, 0);
             auto cache_file_predicate = [](const String & path) {
                 return path.ends_with("idx") // index files.
                     || path.ends_with("mrk") || path.ends_with("mrk2") || path.ends_with("mrk3") // mark files.
                     || path.ends_with("txt") || path.ends_with("dat") || path.ends_with("slice");
             };
 
-            s3disk = std::make_shared<DiskCacheWrapper>(s3disk, cache_disk, cache_file_predicate);
+            s3disk = std::make_shared<DiskCacheWrapper>(s3disk, cache_disk, slice_cache_disk, cache_file_predicate);
         }
 
         return std::make_shared<DiskRestartProxy>(s3disk);

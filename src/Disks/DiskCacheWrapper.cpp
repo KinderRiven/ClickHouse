@@ -45,6 +45,7 @@ private:
     const std::function<void()> completion_callback;
 };
 
+
 enum FileDownloadStatus
 {
     NONE,
@@ -53,6 +54,7 @@ enum FileDownloadStatus
     ERROR
 };
 
+
 struct FileDownloadMetadata
 {
     /// Thread waits on this condition if download process is in progress.
@@ -60,25 +62,16 @@ struct FileDownloadMetadata
     FileDownloadStatus status = NONE;
 };
 
+
 DiskCacheWrapper::DiskCacheWrapper(
-    std::shared_ptr<IDisk> delegate_, std::shared_ptr<DiskLocal> cache_disk_, std::function<bool(const String &)> cache_file_predicate_)
-    : DiskDecorator(delegate_), cache_disk(cache_disk_), cache_file_predicate(cache_file_predicate_)
+    std::shared_ptr<IDisk> delegate_,
+    std::shared_ptr<DiskLocal> cache_disk_,
+    std::shared_ptr<DiskLocal> slice_cache_disk_,
+    std::function<bool(const String &)> cache_file_predicate_)
+    : DiskDecorator(delegate_), cache_disk(cache_disk_), slice_cache_disk(slice_cache_disk_), cache_file_predicate(cache_file_predicate_)
 {
-    /// ---------------------------------------------
-    /// | create slice path to store bin file slice |
-    /// ---------------------------------------------
-    /// |- disks
-    ///     | - s3
-    ///         | - cache
-    ///             | - store [metadata file]
-    ///             | - slice [slice file]
-    ///         | - store
-    /// ----------------------------------------------
-    if (!cache_disk->exists("slice"))
-    {
-        cache_disk->createDirectories("slice");
-    }
 }
+
 
 std::shared_ptr<FileDownloadMetadata> DiskCacheWrapper::acquireDownloadMetadata(const String & path) const
 {
@@ -99,6 +92,82 @@ std::shared_ptr<FileDownloadMetadata> DiskCacheWrapper::acquireDownloadMetadata(
     return metadata;
 }
 
+
+bool DiskCacheWrapper::tryDownloadSliceMetaFile(const String & path, const ReadSettings & settings, std::optional<size_t> size) const
+{
+    LOG_DEBUG(log, "Read file {} from cache", backQuote(path));
+
+    if (!DiskDecorator::exists(path))
+    {
+        return false;
+    }
+
+    if (cache_disk->exists(path))
+    {
+        return true;
+    }
+
+    auto metadata = acquireDownloadMetadata(path);
+
+    {
+        std::unique_lock<std::mutex> lock{mutex};
+
+        if (metadata->status == NONE)
+        {
+            /// This thread will responsible for file downloading to cache.
+            metadata->status = DOWNLOADING;
+            LOG_DEBUG(log, "File {} doesn't exist in cache. Will download it", backQuote(path));
+        }
+        else if (metadata->status == DOWNLOADING)
+        {
+            LOG_DEBUG(log, "Waiting for file {} download to cache", backQuote(path));
+            metadata->condition.wait(lock, [metadata] { return metadata->status == DOWNLOADED || metadata->status == ERROR; });
+        }
+    }
+
+    if (metadata->status == DOWNLOADING)
+    {
+        FileDownloadStatus result_status = DOWNLOADED;
+
+        if (!cache_disk->exists(path))
+        {
+            try
+            {
+                auto dir_path = directoryPath(path);
+                if (!cache_disk->exists(dir_path))
+                {
+                    cache_disk->createDirectories(dir_path);
+                }
+
+                auto tmp_path = path + ".tmp";
+                {
+                    auto src_buffer = DiskDecorator::readFile(path, settings, size);
+                    auto dst_buffer = cache_disk->writeFile(tmp_path, settings.local_fs_buffer_size, WriteMode::Rewrite);
+                    copyData(*src_buffer, *dst_buffer);
+                }
+                cache_disk->moveFile(tmp_path, path);
+
+                LOG_DEBUG(log, "File {} downloaded to cache", backQuote(path));
+            }
+            catch (...)
+            {
+                tryLogCurrentException("DiskCache", "Failed to download file + " + backQuote(path) + " to cache");
+                result_status = ERROR;
+                return false;
+            }
+        }
+
+        /// Notify all waiters that file download is finished.
+        std::unique_lock<std::mutex> lock{mutex};
+
+        metadata->status = result_status;
+        lock.unlock();
+        metadata->condition.notify_all();
+    }
+    return true;
+}
+
+
 std::unique_ptr<ReadBufferFromFileBase>
 DiskCacheWrapper::readFile(const String & path, const ReadSettings & settings, std::optional<size_t> size) const
 {
@@ -106,12 +175,13 @@ DiskCacheWrapper::readFile(const String & path, const ReadSettings & settings, s
     {
         String slice_path = path + ".slice";
         /// We assume that slice file must be cache in local disk.
+        tryDownloadSliceMetaFile(slice_path, settings, size);
         if (cache_disk->exists(slice_path))
         {
             LOG_TRACE(log, "[{}] is slice file, so we create slicereadbuffer.", slice_path);
             return std::make_unique<SliceReadBuffer>(
                 cache_disk->readFile(slice_path, settings, size),
-                cache_disk,
+                slice_cache_disk,
                 nullptr,
                 DiskDecorator::readFile(path, settings, size),
                 settings,
@@ -191,6 +261,7 @@ DiskCacheWrapper::readFile(const String & path, const ReadSettings & settings, s
     return DiskDecorator::readFile(path, settings, size);
 }
 
+
 std::unique_ptr<WriteBufferFromFileBase> DiskCacheWrapper::writeFile(const String & path, size_t buf_size, WriteMode mode)
 {
     if (!cache_file_predicate(path))
@@ -211,12 +282,14 @@ std::unique_ptr<WriteBufferFromFileBase> DiskCacheWrapper::writeFile(const Strin
     });
 }
 
+
 void DiskCacheWrapper::clearDirectory(const String & path)
 {
     if (cache_disk->exists(path))
         cache_disk->clearDirectory(path);
     DiskDecorator::clearDirectory(path);
 }
+
 
 void DiskCacheWrapper::moveDirectory(const String & from_path, const String & to_path)
 {
@@ -231,6 +304,7 @@ void DiskCacheWrapper::moveDirectory(const String & from_path, const String & to
     DiskDecorator::moveDirectory(from_path, to_path);
 }
 
+
 void DiskCacheWrapper::moveFile(const String & from_path, const String & to_path)
 {
     if (cache_disk->exists(from_path))
@@ -243,6 +317,7 @@ void DiskCacheWrapper::moveFile(const String & from_path, const String & to_path
     }
     DiskDecorator::moveFile(from_path, to_path);
 }
+
 
 void DiskCacheWrapper::replaceFile(const String & from_path, const String & to_path)
 {
@@ -257,11 +332,13 @@ void DiskCacheWrapper::replaceFile(const String & from_path, const String & to_p
     DiskDecorator::replaceFile(from_path, to_path);
 }
 
+
 void DiskCacheWrapper::removeFile(const String & path)
 {
     cache_disk->removeFileIfExists(path);
     DiskDecorator::removeFile(path);
 }
+
 
 void DiskCacheWrapper::removeFileIfExists(const String & path)
 {
@@ -269,19 +346,34 @@ void DiskCacheWrapper::removeFileIfExists(const String & path)
     DiskDecorator::removeFileIfExists(path);
 }
 
+
 void DiskCacheWrapper::removeDirectory(const String & path)
 {
     if (cache_disk->exists(path))
+    {
         cache_disk->removeDirectory(path);
+    }
+    if (slice_cache_disk->exists(path))
+    {
+        slice_cache_disk->removeRecursive(path);
+    }
     DiskDecorator::removeDirectory(path);
 }
+
 
 void DiskCacheWrapper::removeRecursive(const String & path)
 {
     if (cache_disk->exists(path))
+    {
         cache_disk->removeRecursive(path);
+    }
+    if (slice_cache_disk->exists(path))
+    {
+        slice_cache_disk->removeRecursive(path);
+    }
     DiskDecorator::removeRecursive(path);
 }
+
 
 void DiskCacheWrapper::removeSharedFile(const String & path, bool keep_s3)
 {
@@ -290,12 +382,14 @@ void DiskCacheWrapper::removeSharedFile(const String & path, bool keep_s3)
     DiskDecorator::removeSharedFile(path, keep_s3);
 }
 
+
 void DiskCacheWrapper::removeSharedRecursive(const String & path, bool keep_s3)
 {
     if (cache_disk->exists(path))
         cache_disk->removeSharedRecursive(path, keep_s3);
     DiskDecorator::removeSharedRecursive(path, keep_s3);
 }
+
 
 void DiskCacheWrapper::createHardLink(const String & src_path, const String & dst_path)
 {
@@ -311,17 +405,20 @@ void DiskCacheWrapper::createHardLink(const String & src_path, const String & ds
     DiskDecorator::createHardLink(src_path, dst_path);
 }
 
+
 void DiskCacheWrapper::createDirectory(const String & path)
 {
     cache_disk->createDirectory(path);
     DiskDecorator::createDirectory(path);
 }
 
+
 void DiskCacheWrapper::createDirectories(const String & path)
 {
     cache_disk->createDirectories(path);
     DiskDecorator::createDirectories(path);
 }
+
 
 ReservationPtr DiskCacheWrapper::reserve(UInt64 bytes)
 {

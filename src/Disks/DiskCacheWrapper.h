@@ -26,6 +26,7 @@ public:
     DiskCacheWrapper(
         std::shared_ptr<IDisk> delegate_,
         std::shared_ptr<DiskLocal> cache_disk_,
+        std::shared_ptr<DiskLocal> slice_cache_disk,
         std::function<bool(const String &)> cache_file_predicate_);
     void createDirectory(const String & path) override;
     void createDirectories(const String & path) override;
@@ -49,10 +50,15 @@ public:
     ReservationPtr reserve(UInt64 bytes) override;
 
 private:
+    bool tryDownloadSliceMetaFile(const String & path, const ReadSettings & settings, std::optional<size_t> size) const;
+
+private:
     std::shared_ptr<FileDownloadMetadata> acquireDownloadMetadata(const String & path) const;
 
     /// Disk to cache files.
     std::shared_ptr<DiskLocal> cache_disk;
+    /// Disk to cache files.
+    std::shared_ptr<DiskLocal> slice_cache_disk;
     /// Cache only files satisfies predicate.
     const std::function<bool(const String &)> cache_file_predicate;
     /// Contains information about currently running file downloads to cache.

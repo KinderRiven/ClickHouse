@@ -43,7 +43,7 @@ SliceReadBuffer::SliceReadBuffer(
 }
 
 
-String SliceReadBuffer::getSliceName(const String & path, int slice_id)
+String SliceReadBuffer::getRemoteSliceName(const String & path, int slice_id)
 {
     String slice_name = path + ".slice" + "_" + std::to_string(slice_id);
     for (size_t i = 0; i < slice_name.length(); i++)
@@ -54,6 +54,13 @@ String SliceReadBuffer::getSliceName(const String & path, int slice_id)
         }
     }
     return slice_name;
+}
+
+
+String SliceReadBuffer::getLocalSlicePath(const String & path, int slice_id)
+{
+    String slice_path = path + ".slice" + "_" + std::to_string(slice_id);
+    return slice_path;
 }
 
 
@@ -75,6 +82,12 @@ int SliceReadBuffer::getSliceFromOffset(off_t off)
 
 void SliceReadBuffer::downloadSliceFile(const String & path, int slice_id)
 {
+    auto dir_path = directoryPath(path);
+    if (!local_cache->exists(dir_path))
+    {
+        local_cache->createDirectories(dir_path);
+    }
+
     String tmp_path = path + ".tmp";
     auto writer = local_cache->writeFile(tmp_path, read_settings.local_fs_buffer_size, WriteMode::Rewrite);
 
@@ -145,69 +158,89 @@ void SliceReadBuffer::uploadSliceFile(const String & local_path, const String & 
 }
 
 
+bool SliceReadBuffer::isTemp(const String & path)
+{
+    String parent = parentPath(path);
+    if (parent[0] == 't' && parent[1] == 'm' && parent[2] == 'p' && parent[3] == '_')
+    {
+        LOG_TRACE(trace_log, "{} is a temp slice, thus we don't upload it.", path);
+        return true;
+    }
+    return false;
+}
+
+
 off_t SliceReadBuffer::switchToSlice(int slice_id, off_t off)
 {
     /// 1.generate slice key
     current_slice = slice_id;
-    String file_name = remote_data_file->getFileName();
-    String slice_name = getSliceName(file_name, current_slice);
-    String slice_path = "slice/" + slice_name;
+    String file_path = remote_data_file->getFileName();
+    String remote_slice_name = getRemoteSliceName(file_path, current_slice);
+    String local_slice_path = getLocalSlicePath(file_path, current_slice);
 
-    if (local_cache->exists(slice_path))
+    if (local_cache->exists(local_slice_path))
     {
-        /// 1. direct read cache file
-        current_slice_file = local_cache->readFile(slice_path, read_settings, read_size);
-        LOG_TRACE(trace_log, "[switch][exists][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
+        /// 1. direct read local cache.
+        current_slice_file = local_cache->readFile(local_slice_path, read_settings, read_size);
+        LOG_TRACE(trace_log, "[switch][exists][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
     }
     else
     {
-        auto remote_slice_file = SliceManagement::instance().tryToReadSliceFromRemote(slice_name, read_settings, read_size);
+        auto remote_slice_file = SliceManagement::instance().tryToReadSliceFromRemote(remote_slice_name, read_settings, read_size);
         if (remote_slice_file != nullptr)
         {
-            /// 2.acquire lock from SliceMangement
-            auto metadata = SliceManagement::instance().acquireDownloadSlice(slice_name);
+            /// 2. Has cached slice in remote cache.
+            auto metadata = SliceManagement::instance().acquireDownloadSlice(remote_slice_name);
             metadata->mutex.lock();
             if (metadata->status == SliceManagement::SliceDownloadStatus::DOWNLOADED)
             {
                 /// A thread may have loaded this slice.
-                LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
+                LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", remote_slice_name, slice_id, off);
             }
             else
             {
-                /// TODO download slice file
-                LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
+                /// 2.1 Download slice file from remote cache to local cache.
+                LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", remote_slice_name, slice_id, off);
                 {
-                    String tmp_path = slice_path + ".tmp";
+                    String tmp_path = local_slice_path + ".tmp";
+                    auto dir_path = directoryPath(tmp_path);
+                    if (!local_cache->exists(dir_path))
+                    {
+                        local_cache->createDirectories(dir_path);
+                    }
                     auto writer = local_cache->writeFile(tmp_path, read_settings.local_fs_buffer_size, WriteMode::Rewrite);
                     copyData(*remote_slice_file, *writer);
-                    local_cache->moveFile(tmp_path, slice_path); /// atomic
+                    local_cache->moveFile(tmp_path, local_slice_path); /// atomic
                 }
                 metadata->status = SliceManagement::SliceDownloadStatus::DOWNLOADED;
             }
-            LOG_TRACE(trace_log, "[switch][readFile][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
-            current_slice_file = local_cache->readFile(slice_path, read_settings, read_size);
+            LOG_TRACE(trace_log, "[switch][readFile][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
+            current_slice_file = local_cache->readFile(local_slice_path, read_settings, read_size);
             metadata->mutex.unlock();
         }
         else
         {
-            /// 2.acquire lock from SliceMangement
-            auto metadata = SliceManagement::instance().acquireDownloadSlice(slice_name);
+            /// 3. No cahced slice in local or remote cache, thus we need to download from storage layer.
+            auto metadata = SliceManagement::instance().acquireDownloadSlice(remote_slice_name);
             metadata->mutex.lock();
             if (metadata->status == SliceManagement::SliceDownloadStatus::DOWNLOADED)
             {
                 /// A thread may have loaded this slice.
-                LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
+                LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", remote_slice_name, slice_id, off);
             }
             else
             {
-                /// TODO download slice file
-                LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
-                downloadSliceFile(slice_path, current_slice);
-                uploadSliceFile(slice_path, slice_name);
+                /// Download slice file from storage layer.
+                LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", remote_slice_name, slice_id, off);
+                downloadSliceFile(local_slice_path, current_slice);
+                /// if (!isTemp(local_slice_path))
+                /// {
+                ///     uploadSliceFile(local_slice_path, remote_slice_name);
+                /// }
                 metadata->status = SliceManagement::SliceDownloadStatus::DOWNLOADED;
             }
-            LOG_TRACE(trace_log, "[switch][readFile][file:{}][slice:{}][offset:{}]", slice_name, slice_id, off);
-            current_slice_file = local_cache->readFile(slice_path, read_settings, read_size);
+            LOG_TRACE(trace_log, "[switch][readFile][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
+            current_slice_file = local_cache->readFile(local_slice_path, read_settings, read_size);
             metadata->mutex.unlock();
         }
     }

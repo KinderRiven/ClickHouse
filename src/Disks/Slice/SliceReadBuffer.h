@@ -61,7 +61,9 @@ public:
     bool nextImpl() override;
 
 private:
-    String getSliceName(const String & path, int slice_id);
+    String getRemoteSliceName(const String & path, int slice_id);
+
+    String getLocalSlicePath(const String & path, int slice_id);
 
     int getSliceFromOffset(off_t off);
 
@@ -70,6 +72,8 @@ private:
     void downloadSliceFile(const String & path, int slice_id);
 
     void uploadSliceFile(const String & local_path, const String & remote_path);
+
+    bool isTemp(const String &local_path);
 
 private:
     int current_slice = -1;

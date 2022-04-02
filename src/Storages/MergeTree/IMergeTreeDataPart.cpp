@@ -1283,6 +1283,7 @@ void IMergeTreeDataPart::projectionRemove(const String & parent_to, bool keep_sh
      }
  }
 
+
 String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix) const
 {
     String res;
@@ -1304,6 +1305,7 @@ String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix) const
 
     return res;
 }
+
 
 String IMergeTreeDataPart::getRelativePathForDetachedPart(const String & prefix) const
 {
