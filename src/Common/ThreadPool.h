@@ -1,20 +1,20 @@
 #pragma once
 
-#include <cstdint>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <functional>
-#include <queue>
-#include <list>
-#include <optional>
 #include <atomic>
+#include <condition_variable>
+#include <cstdint>
+#include <functional>
+#include <list>
+#include <mutex>
+#include <optional>
+#include <queue>
+#include <thread>
 
 #include <boost/heap/priority_queue.hpp>
 
+#include <base/scope_guard.h>
 #include <Poco/Event.h>
 #include <Common/ThreadStatus.h>
-#include <base/scope_guard.h>
 
 /** Very simple thread pool similar to boost::threadpool.
   * Advantages:
@@ -97,13 +97,9 @@ private:
         Job job;
         int priority;
 
-        JobWithPriority(Job job_, int priority_)
-            : job(job_), priority(priority_) {}
+        JobWithPriority(Job job_, int priority_) : job(job_), priority(priority_) { }
 
-        bool operator< (const JobWithPriority & rhs) const
-        {
-            return priority < rhs.priority;
-        }
+        bool operator<(const JobWithPriority & rhs) const { return priority < rhs.priority; }
     };
 
     boost::heap::priority_queue<JobWithPriority> jobs;
@@ -140,11 +136,10 @@ class GlobalThreadPool : public FreeThreadPool, private boost::noncopyable
 {
     static std::unique_ptr<GlobalThreadPool> the_instance;
 
-    GlobalThreadPool(size_t max_threads_, size_t max_free_threads_,
-            size_t queue_size_, const bool shutdown_on_exception_)
-        : FreeThreadPool(max_threads_, max_free_threads_, queue_size_,
-            shutdown_on_exception_)
-    {}
+    GlobalThreadPool(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, const bool shutdown_on_exception_)
+        : FreeThreadPool(max_threads_, max_free_threads_, queue_size_, shutdown_on_exception_)
+    {
+    }
 
 public:
     static void initialize(size_t max_threads = 10000);
@@ -162,37 +157,33 @@ public:
 
     template <typename Function, typename... Args>
     explicit ThreadFromGlobalPool(Function && func, Args &&... args)
-        : state(std::make_shared<Poco::Event>())
-        , thread_id(std::make_shared<std::thread::id>())
+        : state(std::make_shared<Poco::Event>()), thread_id(std::make_shared<std::thread::id>())
     {
         /// NOTE: If this will throw an exception, the destructor won't be called.
-        GlobalThreadPool::instance().scheduleOrThrow([
-            thread_id = thread_id,
-            state = state,
-            func = std::forward<Function>(func),
-            args = std::make_tuple(std::forward<Args>(args)...)]() mutable /// mutable is needed to destroy capture
-        {
-            auto event = std::move(state);
-            SCOPE_EXIT(event->set());
+        GlobalThreadPool::instance().scheduleOrThrow(
+            [thread_id = thread_id,
+             state = state,
+             func = std::forward<Function>(func),
+             args = std::make_tuple(std::forward<Args>(args)...)]() mutable /// mutable is needed to destroy capture
+            {
+                auto event = std::move(state);
+                SCOPE_EXIT(event->set());
 
-            thread_id = std::make_shared<std::thread::id>(std::this_thread::get_id());
+                thread_id = std::make_shared<std::thread::id>(std::this_thread::get_id());
 
-            /// This moves are needed to destroy function and arguments before exit.
-            /// It will guarantee that after ThreadFromGlobalPool::join all captured params are destroyed.
-            auto function = std::move(func);
-            auto arguments = std::move(args);
+                /// This moves are needed to destroy function and arguments before exit.
+                /// It will guarantee that after ThreadFromGlobalPool::join all captured params are destroyed.
+                auto function = std::move(func);
+                auto arguments = std::move(args);
 
-            /// Thread status holds raw pointer on query context, thus it always must be destroyed
-            /// before sending signal that permits to join this thread.
-            DB::ThreadStatus thread_status;
-            std::apply(function, arguments);
-        });
+                /// Thread status holds raw pointer on query context, thus it always must be destroyed
+                /// before sending signal that permits to join this thread.
+                DB::ThreadStatus thread_status;
+                std::apply(function, arguments);
+            });
     }
 
-    ThreadFromGlobalPool(ThreadFromGlobalPool && rhs)
-    {
-        *this = std::move(rhs);
-    }
+    ThreadFromGlobalPool(ThreadFromGlobalPool && rhs) { *this = std::move(rhs); }
 
     ThreadFromGlobalPool & operator=(ThreadFromGlobalPool && rhs)
     {

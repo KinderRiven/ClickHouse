@@ -73,7 +73,6 @@ void registerStorageFileLog(StorageFactory & factory);
 void registerStorageSQLite(StorageFactory & factory);
 #endif
 
-
 void registerStorages()
 {
     auto & factory = StorageFactory::instance();

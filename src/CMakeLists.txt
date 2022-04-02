@@ -80,6 +80,7 @@ list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_dele
 add_headers_and_sources(dbms Disks/IO)
 add_headers_and_sources(dbms Disks/KV)
 add_headers_and_sources(dbms Disks/Slice)
+add_headers_and_sources(dbms Storages/MergeTree/Cache)
 
 if (USE_SQLITE)
     add_headers_and_sources(dbms Databases/SQLite)

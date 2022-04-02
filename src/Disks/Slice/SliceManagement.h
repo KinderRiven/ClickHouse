@@ -6,6 +6,8 @@
 #include <Disks/IDisk.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <IO/WriteBufferFromFileBase.h>
+#include <Interpreters/Context.h>
+#include <Storages/MergeTree/Cache/CacheJobsAssignee.h>
 #include <base/logger_useful.h>
 
 namespace DB
@@ -32,6 +34,8 @@ public:
 public:
     static SliceManagement & instance();
 
+    void initlizate(ContextPtr context_);
+
     void setupRemoteCacheDisk(std::shared_ptr<IDisk> remote_disk);
 
     std::unique_ptr<WriteBufferFromFileBase>
@@ -43,6 +47,7 @@ public:
     std::shared_ptr<SliceManagement::SliceDownloadMetadata> acquireDownloadSlice(const std::string & path);
 
 private:
+    /// SliceManagement() = default;
     SliceManagement() = default;
 
 private:
@@ -55,5 +60,11 @@ private:
     std::shared_ptr<IDisk> remote_disk;
 
     Poco::Logger * log = &Poco::Logger::get("[SliceManagement]");
+
+    std::shared_ptr<CacheJobsAssignee> background_downloads_assignee = nullptr;
+
+    ContextPtr context = nullptr;
+
+    bool hasInit = false;
 };
 };

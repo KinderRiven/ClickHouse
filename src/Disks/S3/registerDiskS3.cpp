@@ -1,5 +1,6 @@
 #include <Common/config.h>
 
+#include <Disks/Slice/SliceManagement.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
@@ -219,6 +220,7 @@ void registerDiskS3(DiskFactory & factory)
             s3disk = std::make_shared<DiskCacheWrapper>(s3disk, cache_disk, slice_cache_disk, cache_file_predicate);
         }
 
+        SliceManagement::instance().initlizate(context);
         return std::make_shared<DiskRestartProxy>(s3disk);
     };
     factory.registerDiskType("s3", creator);

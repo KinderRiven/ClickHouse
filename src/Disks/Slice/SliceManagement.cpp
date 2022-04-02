@@ -5,9 +5,22 @@ namespace DB
 
 SliceManagement & SliceManagement::instance()
 {
-    static SliceManagement manage;
-    return manage;
+    static SliceManagement ret;
+    return ret;
 }
+
+
+void SliceManagement::initlizate(ContextPtr context_)
+{
+    if (!hasInit)
+    {
+        context = context_;
+        background_downloads_assignee = std::make_shared<CacheJobsAssignee>(context->getGlobalContext());
+        background_downloads_assignee->start();
+        hasInit = true;
+    }
+}
+
 
 void SliceManagement::setupRemoteCacheDisk(std::shared_ptr<IDisk> remote_disk_)
 {
@@ -22,6 +35,7 @@ void SliceManagement::setupRemoteCacheDisk(std::shared_ptr<IDisk> remote_disk_)
     remote_disk = std::move(remote_disk_);
 }
 
+
 std::unique_ptr<WriteBufferFromFileBase> SliceManagement::createRemoteFileToUpload(const String & path, size_t buf_size, WriteMode mode)
 {
     if (remote_disk != nullptr)
@@ -33,6 +47,7 @@ std::unique_ptr<WriteBufferFromFileBase> SliceManagement::createRemoteFileToUplo
         return nullptr;
     }
 }
+
 
 std::unique_ptr<ReadBufferFromFileBase>
 SliceManagement::tryToReadSliceFromRemote(const String & key, const ReadSettings & settings, std::optional<size_t> size)
@@ -58,9 +73,11 @@ SliceManagement::tryToReadSliceFromRemote(const String & key, const ReadSettings
     }
 }
 
+
 std::shared_ptr<SliceManagement::SliceDownloadMetadata> SliceManagement::acquireDownloadSlice(const std::string & path)
 {
     mutex.lock();
+    background_downloads_assignee->scheduleDownloadTask();
 
     auto it = slice_downloads.find(path);
     if (it != slice_downloads.end())
