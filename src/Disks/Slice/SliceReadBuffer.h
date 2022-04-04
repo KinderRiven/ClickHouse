@@ -52,6 +52,8 @@ public:
         const ReadSettings & settings,
         std::optional<size_t> size);
 
+    ~SliceReadBuffer();
+
     std::string getFileName() const override { return remote_data_file->getFileName(); }
 
     off_t getPosition() override;
@@ -69,11 +71,15 @@ private:
 
     off_t switchToSlice(int slice_id, off_t off);
 
+    bool isTemp(const String & local_path);
+
+    void tryToPrefetch(const String & path, int slice_id);
+
+public:
     void downloadSliceFile(const String & path, int slice_id);
 
     void uploadSliceFile(const String & local_path, const String & remote_path);
 
-    bool isTemp(const String &local_path);
 
 private:
     int current_slice = -1;

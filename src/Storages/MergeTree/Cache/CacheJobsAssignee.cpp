@@ -1,4 +1,6 @@
 #include <random>
+#include <Disks/Slice/SliceManagement.h>
+#include <Disks/Slice/SliceReadBuffer.h>
 #include <Storages/MergeTree/Cache/CacheJobsAssignee.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <pcg_random.hpp>
@@ -8,7 +10,8 @@
 namespace DB
 {
 
-CacheJobsAssignee::CacheJobsAssignee(ContextPtr global_context_) : WithContext(global_context_), rng(randomSeed())
+CacheJobsAssignee::CacheJobsAssignee(CacheTaskType type_, ContextPtr global_context_)
+    : WithContext(global_context_), type(type_), rng(randomSeed())
 {
 }
 
@@ -47,10 +50,19 @@ void CacheJobsAssignee::postpone()
 }
 
 
-void CacheJobsAssignee::scheduleDownloadTask()
+void CacheJobsAssignee::addDownloadTask(const String path, int slice_id, std::shared_ptr<SliceDownloadMetadata> metadata)
 {
-    bool res = true;
-    res ? trigger() : postpone();
+    download_mutex.lock();
+    download_tasks.push(CacheJobsAssignee::Task(path, slice_id, metadata));
+    download_mutex.unlock();
+    trigger();
+    /// postpone();
+}
+
+
+void CacheJobsAssignee::addCleanupTask()
+{
+    trigger();
 }
 
 
@@ -76,7 +88,24 @@ void CacheJobsAssignee::finish()
 
 void CacheJobsAssignee::threadFunc()
 {
-    LOG_TRACE(trace_log, "This is a cache jobs assignee test.");
+    if (type == CacheTaskType::CACHE_DOWNLOAD)
+    {
+        download_mutex.lock();
+        while (!download_tasks.empty())
+        {
+            LOG_TRACE(
+                trace_log,
+                "This is a cache jobs assignee test download {}, slice {}.",
+                download_tasks.front().path,
+                download_tasks.front().slice_id);
+            download_tasks.pop();
+        }
+        download_mutex.unlock();
+    }
+    else if (type == CacheTaskType::CACHE_CLEANUP)
+    {
+        SliceManagement::instance().cleanupWithFIFO();
+    }
 }
 
 

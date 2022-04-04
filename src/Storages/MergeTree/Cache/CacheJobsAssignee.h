@@ -1,5 +1,6 @@
 #pragma once
 
+#include <queue>
 #include <Core/BackgroundSchedulePool.h>
 #include <base/logger_useful.h>
 #include <pcg_random.hpp>
@@ -7,6 +8,16 @@
 
 namespace DB
 {
+
+class SliceReadBuffer;
+class SliceManagement;
+struct SliceDownloadMetadata;
+
+enum CacheTaskType
+{
+    CACHE_CLEANUP,
+    CACHE_DOWNLOAD,
+};
 
 /// Settings for background tasks scheduling. Each background assignee has one
 /// BackgroundSchedulingPoolTask and depending on execution result may put this
@@ -29,6 +40,23 @@ struct CacheTaskSchedulingSettings
 class CacheJobsAssignee : public WithContext
 {
 private:
+    struct Task
+    {
+    public:
+        const String path;
+        int slice_id;
+        std::shared_ptr<SliceDownloadMetadata> metadata;
+
+    public:
+        Task(const String path_, int slice_id_, std::shared_ptr<SliceDownloadMetadata> metadata_)
+            : path(path_), slice_id(slice_id_), metadata(metadata_)
+        {
+        }
+    };
+
+private:
+    CacheTaskType type;
+
     /// Settings for execution control of background scheduling task
     CacheTaskSchedulingSettings sleep_settings;
     /// Useful for random backoff timeouts generation
@@ -41,6 +69,9 @@ private:
     BackgroundSchedulePool::TaskHolder holder;
     /// Mutex for thread safety
     std::mutex holder_mutex;
+
+    std::mutex download_mutex;
+    std::queue<CacheJobsAssignee::Task> download_tasks;
 
     Poco::Logger * trace_log = &Poco::Logger::get("[CacheJobsAssignee]");
 
@@ -55,12 +86,14 @@ public:
     void postpone();
     void finish();
 
-    void scheduleDownloadTask();
+    void addDownloadTask(const String path, int slice_id, std::shared_ptr<SliceDownloadMetadata> metadata);
+
+    void addCleanupTask();
 
     /// Just call finish
     ~CacheJobsAssignee();
 
-    CacheJobsAssignee(ContextPtr global_context_);
+    CacheJobsAssignee(CacheTaskType type, ContextPtr global_context_);
 
 private:
     /// Function that executes in background scheduling pool

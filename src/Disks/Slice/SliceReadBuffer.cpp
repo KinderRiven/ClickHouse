@@ -43,6 +43,11 @@ SliceReadBuffer::SliceReadBuffer(
 }
 
 
+SliceReadBuffer::~SliceReadBuffer()
+{
+}
+
+
 String SliceReadBuffer::getRemoteSliceName(const String & path, int slice_id)
 {
     String slice_name = path + ".slice" + "_" + std::to_string(slice_id);
@@ -170,12 +175,70 @@ bool SliceReadBuffer::isTemp(const String & path)
 }
 
 
+void SliceReadBuffer::tryToPrefetch(const String & path, int slice_id)
+{
+    String local_slice_path = getLocalSlicePath(path, slice_id);
+    if (static_cast<size_t>(slice_id) < vec_slice.size())
+    {
+        SliceManagement::instance().tryToAddBackgroundDownloadTask(local_slice_path, slice_id);
+    }
+}
+
+
 off_t SliceReadBuffer::switchToSlice(int slice_id, off_t off)
 {
     /// 1.generate slice key
     current_slice = slice_id;
     String file_path = remote_data_file->getFileName();
-    String remote_slice_name = getRemoteSliceName(file_path, current_slice);
+    String local_slice_path = getLocalSlicePath(file_path, current_slice);
+retry:
+    auto metadata = SliceManagement::instance().acquireDownloadSlice(local_slice_path);
+    metadata->Lock();
+    if (metadata->isDownloaded())
+    {
+        /// Another thread has loaded this slice.
+        LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
+    }
+    else if (metadata->isLoading())
+    {
+        /// TODO wait or prefetch.
+        LOG_TRACE(trace_log, "[switch][loading][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
+        while (!metadata->isLoading())
+        {
+            /// wait until this slice has been downloaded.
+        }
+    }
+    else if (metadata->isDelete())
+    {
+        LOG_TRACE(trace_log, "[switch][delete][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
+        metadata->Unlock();
+        goto retry;
+    }
+    else
+    {
+        /// Download slice file from storage layer.
+        LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
+        metadata->setDownloading();
+        /// tryToPrefetch(file_path, current_slice + 1);
+        downloadSliceFile(local_slice_path, current_slice);
+        metadata->setDownloaded();
+    }
+    metadata->Unlock();
+    LOG_TRACE(trace_log, "[switch][readFile][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
+    current_slice_file = local_cache->readFile(local_slice_path, read_settings, read_size);
+    /// important !!!
+    swap(*current_slice_file);
+    return off;
+}
+
+
+#if 0
+off_t SliceReadBuffer::switchToSlice(int slice_id, off_t off)
+{
+    /// 1.generate slice key
+    current_slice = slice_id;
+    String file_path = remote_data_file->getFileName();
+    /// String remote_slice_name = getRemoteSliceName(file_path, current_slice);
     String local_slice_path = getLocalSlicePath(file_path, current_slice);
 
     if (local_cache->exists(local_slice_path))
@@ -186,21 +249,22 @@ off_t SliceReadBuffer::switchToSlice(int slice_id, off_t off)
     }
     else
     {
-        auto remote_slice_file = SliceManagement::instance().tryToReadSliceFromRemote(remote_slice_name, read_settings, read_size);
+        std::unique_ptr<ReadBufferFromFileBase> remote_slice_file = nullptr;
+        /// auto remote_slice_file = SliceManagement::instance().tryToReadSliceFromRemote(remote_slice_name, read_settings, read_size);
         if (remote_slice_file != nullptr)
         {
             /// 2. Has cached slice in remote cache.
-            auto metadata = SliceManagement::instance().acquireDownloadSlice(remote_slice_name);
-            metadata->mutex.lock();
-            if (metadata->status == SliceManagement::SliceDownloadStatus::DOWNLOADED)
+            auto metadata = SliceManagement::instance().acquireDownloadSlice(local_slice_path);
+            metadata->Lock();
+            if (metadata->isDownloaded())
             {
-                /// A thread may have loaded this slice.
-                LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", remote_slice_name, slice_id, off);
+                /// Another thread has loaded this slice.
+                LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
             }
             else
             {
                 /// 2.1 Download slice file from remote cache to local cache.
-                LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", remote_slice_name, slice_id, off);
+                LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
                 {
                     String tmp_path = local_slice_path + ".tmp";
                     auto dir_path = directoryPath(tmp_path);
@@ -212,42 +276,45 @@ off_t SliceReadBuffer::switchToSlice(int slice_id, off_t off)
                     copyData(*remote_slice_file, *writer);
                     local_cache->moveFile(tmp_path, local_slice_path); /// atomic
                 }
-                metadata->status = SliceManagement::SliceDownloadStatus::DOWNLOADED;
+                metadata->setDownloaded();
             }
             LOG_TRACE(trace_log, "[switch][readFile][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
             current_slice_file = local_cache->readFile(local_slice_path, read_settings, read_size);
-            metadata->mutex.unlock();
+            metadata->Unlock();
         }
         else
         {
             /// 3. No cahced slice in local or remote cache, thus we need to download from storage layer.
-            auto metadata = SliceManagement::instance().acquireDownloadSlice(remote_slice_name);
-            metadata->mutex.lock();
-            if (metadata->status == SliceManagement::SliceDownloadStatus::DOWNLOADED)
+            auto metadata = SliceManagement::instance().acquireDownloadSlice(local_slice_path);
+            metadata->Lock();
+            if (metadata->isDownloaded())
             {
-                /// A thread may have loaded this slice.
-                LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", remote_slice_name, slice_id, off);
+                /// Another thread has loaded this slice.
+                LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
+            }
+            else if (metadata->isLoading())
+            {
+                /// TODO wait or prefetch.
             }
             else
             {
                 /// Download slice file from storage layer.
-                LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", remote_slice_name, slice_id, off);
+                metadata->setDownloading();
+                LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
+                tryToPrefetch(file_path, current_slice + 1);
                 downloadSliceFile(local_slice_path, current_slice);
-                /// if (!isTemp(local_slice_path))
-                /// {
-                ///     uploadSliceFile(local_slice_path, remote_slice_name);
-                /// }
-                metadata->status = SliceManagement::SliceDownloadStatus::DOWNLOADED;
+                metadata->setDownloaded();
             }
             LOG_TRACE(trace_log, "[switch][readFile][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
             current_slice_file = local_cache->readFile(local_slice_path, read_settings, read_size);
-            metadata->mutex.unlock();
+            metadata->Unlock();
         }
     }
     /// important !!!
     swap(*current_slice_file);
     return off;
 }
+#endif
 
 
 off_t SliceReadBuffer::getPosition()

@@ -70,6 +70,7 @@ DiskCacheWrapper::DiskCacheWrapper(
     std::function<bool(const String &)> cache_file_predicate_)
     : DiskDecorator(delegate_), cache_disk(cache_disk_), slice_cache_disk(slice_cache_disk_), cache_file_predicate(cache_file_predicate_)
 {
+    SliceManagement::instance().setupLocalCacheDisk(slice_cache_disk);
 }
 
 
