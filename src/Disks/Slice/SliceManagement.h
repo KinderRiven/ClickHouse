@@ -16,6 +16,7 @@ namespace DB
 
 class SliceReadBuffer;
 
+
 enum SliceDownloadStatus
 {
     SLICE_NONE,
@@ -25,6 +26,7 @@ enum SliceDownloadStatus
     SLICE_ERROR,
     SLICE_DELETE,
 };
+
 
 struct SliceDownloadMetadata
 {
@@ -65,6 +67,7 @@ public:
 
     void Unlock() { mutex.unlock(); }
 };
+
 
 class SliceManagement
 {

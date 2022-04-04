@@ -203,7 +203,7 @@ void SliceManagement::cleanupWithFIFO()
                 local_disk->removeFile(cleanup_queue.front().first);
                 free_space_size += cleanup_queue.front().second->size;
                 cleanup_queue.front().second->setDelete();
-                LOG_TRACE(log, "Using FIFO to rm slice {}.", cleanup_queue.front().first);
+                LOG_TRACE(log, "Using FIFO to rm slice {}, access {}.", cleanup_queue.front().first, cleanup_queue.front().second->access);
             }
             cleanup_queue.front().second->Unlock();
             cleanup_queue.pop();

@@ -45,6 +45,7 @@ SliceReadBuffer::SliceReadBuffer(
 
 SliceReadBuffer::~SliceReadBuffer()
 {
+    LOG_TRACE(trace_log, "free slice read buffee.");
 }
 
 
