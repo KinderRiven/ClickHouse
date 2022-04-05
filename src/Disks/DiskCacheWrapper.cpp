@@ -68,7 +68,11 @@ DiskCacheWrapper::DiskCacheWrapper(
     std::shared_ptr<DiskLocal> cache_disk_,
     std::shared_ptr<DiskLocal> slice_cache_disk_,
     std::function<bool(const String &)> cache_file_predicate_)
-    : DiskDecorator(delegate_), cache_disk(cache_disk_), slice_cache_disk(slice_cache_disk_), cache_file_predicate(cache_file_predicate_)
+    : DiskDecorator(delegate_)
+    , cache_disk(cache_disk_)
+    , slice_cache_disk(slice_cache_disk_)
+    , storage_disk(delegate_)
+    , cache_file_predicate(cache_file_predicate_)
 {
     SliceManagement::instance().setupLocalCacheDisk(slice_cache_disk);
 }
@@ -183,7 +187,7 @@ DiskCacheWrapper::readFile(const String & path, const ReadSettings & settings, s
             return std::make_unique<SliceReadBuffer>(
                 cache_disk->readFile(slice_path, settings, size),
                 slice_cache_disk,
-                nullptr,
+                storage_disk,
                 DiskDecorator::readFile(path, settings, size),
                 settings,
                 size);

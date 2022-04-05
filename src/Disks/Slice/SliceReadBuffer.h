@@ -41,13 +41,13 @@ public:
     ///
     /// [1] slice_file: File for saving slice information.
     /// [2] local_cache: Local disk, which can be used to cache fragment data and read fragment cache from it.
-    /// [3] remote_cache: Remote cache, which has not been implemented yet.
+    /// [3] remote_storage: Remote stoarge.
     /// [4] remote_file: Remote data file. When both local cache and remote cache miss, you need to read data fragments from it.
     ///
     SliceReadBuffer(
         std::unique_ptr<ReadBufferFromFileBase> slice_file,
         std::shared_ptr<DiskLocal> local_cache,
-        std::shared_ptr<IDisk> remote_cache,
+        std::shared_ptr<IDisk> remote_storage,
         std::unique_ptr<ReadBufferFromFileBase> remote_file,
         const ReadSettings & settings,
         std::optional<size_t> size);
@@ -90,7 +90,7 @@ private:
 
     std::shared_ptr<DiskLocal> local_cache;
 
-    std::shared_ptr<IDisk> remote_cache;
+    std::shared_ptr<IDisk> remote_storage;
 
     std::unique_ptr<ReadBufferFromFileBase> remote_data_file;
 

@@ -4,6 +4,7 @@
 #include <list>
 #include <mutex>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <Disks/IDisk.h>
 #include <IO/ReadBufferFromFileBase.h>
@@ -17,15 +18,16 @@ namespace DB
 
 class SliceReadBuffer;
 
+
 enum SliceDownloadStatus
 {
     SLICE_NONE,
     SLICE_PREFETCH,
     SLICE_DOWNLOADING,
     SLICE_DOWNLOADED,
-    SLICE_ERROR,
     SLICE_DELETE,
 };
+
 
 struct SliceDownloadMetadata
 {
@@ -72,6 +74,28 @@ public:
 };
 
 
+struct SlicePrefetchTask
+{
+public:
+    std::shared_ptr<IDisk> local_disk;
+    std::shared_ptr<IDisk> remote_disk;
+    ReadSettings read_settings;
+    const String filename;
+    std::vector<std::tuple<int, size_t, size_t>> vec_slice; /// <slice_id, offset, size>
+
+public:
+    SlicePrefetchTask(
+        std::shared_ptr<IDisk> local_disk_, std::shared_ptr<IDisk> remote_disk_, ReadSettings & read_settings_, const String filename_)
+        : local_disk(local_disk_), remote_disk(remote_disk_), read_settings(read_settings_), filename(filename_)
+    {
+    }
+
+    void Add(int slice_id, size_t offset, size_t size) { vec_slice.push_back(std::make_tuple(slice_id, offset, size)); }
+
+    size_t Count() { return vec_slice.size(); }
+};
+
+
 class SliceManagement
 {
 public:
@@ -95,11 +119,13 @@ public:
 
     SlicePtr acquireDownloadSlice(const std::string & path);
 
-    SlicePtr tryToAddBackgroundDownloadTask(const String & path, int slice_id);
+    void tryToAddBackgroundPrefetchTask(std::shared_ptr<SlicePrefetchTask> task);
 
     void tryToAddBackgroundCleanupTask();
 
     void cleanupMainList();
+
+    void handlePrefetch();
 
 private:
     /// SliceManagement() = default;
@@ -114,26 +140,39 @@ private:
     /// Protects concurrent downloading files to cache.
     mutable std::mutex mutex;
 
+    /// local cache disk
     std::shared_ptr<IDisk> local_disk;
 
+    /// remote cache disk
     std::shared_ptr<IDisk> remote_disk;
 
+    /// log
     Poco::Logger * log = &Poco::Logger::get("[SliceManagement]");
 
-    std::shared_ptr<CacheJobsAssignee> background_downloads_assignee = nullptr;
-
+    /// cleanup
     std::shared_ptr<CacheJobsAssignee> background_cleanup_assignee = nullptr;
+
+    SliceList main_list;
 
     bool is_cleanup = false;
 
+    /// prefetch
+    std::shared_ptr<CacheJobsAssignee> background_prefetch_assignee = nullptr;
+
+    std::mutex prefetch_mutex;
+
+    std::queue<std::shared_ptr<SlicePrefetchTask>> prefetch_queue;
+
+    bool is_prefetch = false;
+
+    /// total slice cache can use space size
     size_t total_space_size = 0;
 
+    /// usage cspace size
     size_t usage_space_size = 0;
 
     ContextPtr context = nullptr;
 
     bool hasInit = false;
-
-    SliceList main_list;
 };
 };

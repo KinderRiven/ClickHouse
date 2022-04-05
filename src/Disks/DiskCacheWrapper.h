@@ -52,17 +52,23 @@ public:
 private:
     bool tryDownloadSliceMetaFile(const String & path, const ReadSettings & settings, std::optional<size_t> size) const;
 
-private:
     std::shared_ptr<FileDownloadMetadata> acquireDownloadMetadata(const String & path) const;
-
+private:
     /// Disk to cache files.
     std::shared_ptr<DiskLocal> cache_disk;
+
     /// Disk to cache files.
     std::shared_ptr<DiskLocal> slice_cache_disk;
+
+    /// storage disk.
+    std::shared_ptr<IDisk> storage_disk;
+
     /// Cache only files satisfies predicate.
     const std::function<bool(const String &)> cache_file_predicate;
+
     /// Contains information about currently running file downloads to cache.
     mutable std::unordered_map<String, std::weak_ptr<FileDownloadMetadata>> file_downloads;
+
     /// Protects concurrent downloading files to cache.
     mutable std::mutex mutex;
 

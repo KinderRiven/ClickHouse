@@ -50,22 +50,6 @@ void CacheJobsAssignee::postpone()
 }
 
 
-void CacheJobsAssignee::addDownloadTask(const String path, int slice_id, std::shared_ptr<SliceDownloadMetadata> metadata)
-{
-    download_mutex.lock();
-    download_tasks.push(CacheJobsAssignee::Task(path, slice_id, metadata));
-    download_mutex.unlock();
-    trigger();
-    /// postpone();
-}
-
-
-void CacheJobsAssignee::addCleanupTask()
-{
-    trigger();
-}
-
-
 void CacheJobsAssignee::start()
 {
     std::lock_guard lock(holder_mutex);
@@ -88,19 +72,9 @@ void CacheJobsAssignee::finish()
 
 void CacheJobsAssignee::threadFunc()
 {
-    if (type == CacheTaskType::CACHE_DOWNLOAD)
+    if (type == CacheTaskType::CACHE_PREFETCH)
     {
-        download_mutex.lock();
-        while (!download_tasks.empty())
-        {
-            LOG_TRACE(
-                trace_log,
-                "This is a cache jobs assignee test download {}, slice {}.",
-                download_tasks.front().path,
-                download_tasks.front().slice_id);
-            download_tasks.pop();
-        }
-        download_mutex.unlock();
+        SliceManagement::instance().handlePrefetch();
     }
     else if (type == CacheTaskType::CACHE_CLEANUP)
     {

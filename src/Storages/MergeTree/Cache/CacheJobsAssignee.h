@@ -16,7 +16,7 @@ struct SliceDownloadMetadata;
 enum CacheTaskType
 {
     CACHE_CLEANUP,
-    CACHE_DOWNLOAD,
+    CACHE_PREFETCH,
 };
 
 /// Settings for background tasks scheduling. Each background assignee has one
@@ -40,21 +40,6 @@ struct CacheTaskSchedulingSettings
 class CacheJobsAssignee : public WithContext
 {
 private:
-    struct Task
-    {
-    public:
-        const String path;
-        int slice_id;
-        std::shared_ptr<SliceDownloadMetadata> metadata;
-
-    public:
-        Task(const String path_, int slice_id_, std::shared_ptr<SliceDownloadMetadata> metadata_)
-            : path(path_), slice_id(slice_id_), metadata(metadata_)
-        {
-        }
-    };
-
-private:
     CacheTaskType type;
 
     /// Settings for execution control of background scheduling task
@@ -70,9 +55,6 @@ private:
     /// Mutex for thread safety
     std::mutex holder_mutex;
 
-    std::mutex download_mutex;
-    std::queue<CacheJobsAssignee::Task> download_tasks;
-
     Poco::Logger * trace_log = &Poco::Logger::get("[CacheJobsAssignee]");
 
 public:
@@ -85,10 +67,6 @@ public:
     void trigger();
     void postpone();
     void finish();
-
-    void addDownloadTask(const String path, int slice_id, std::shared_ptr<SliceDownloadMetadata> metadata);
-
-    void addCleanupTask();
 
     /// Just call finish
     ~CacheJobsAssignee();

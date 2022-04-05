@@ -9,13 +9,13 @@ namespace DB
 SliceReadBuffer::SliceReadBuffer(
     std::unique_ptr<ReadBufferFromFileBase> slice_file_,
     std::shared_ptr<DiskLocal> local_cache_,
-    std::shared_ptr<IDisk> remote_cache_,
+    std::shared_ptr<IDisk> remote_storage_,
     std::unique_ptr<ReadBufferFromFileBase> remote_data_file_,
     const ReadSettings & settings_,
     std::optional<size_t> size_)
     : slice_file(std::move(slice_file_))
     , local_cache(std::move(local_cache_))
-    , remote_cache(std::move(remote_cache_))
+    , remote_storage(std::move(remote_storage_))
     , remote_data_file(std::move(remote_data_file_))
     , read_settings(settings_)
     , read_size(size_)
@@ -178,10 +178,24 @@ bool SliceReadBuffer::isTemp(const String & path)
 
 void SliceReadBuffer::tryToPrefetch(const String & path, int slice_id)
 {
-    String local_slice_path = getLocalSlicePath(path, slice_id);
-    if (static_cast<size_t>(slice_id) < vec_slice.size())
+    int skip = 1;
+    int num_prefetch = 3;
+    std::shared_ptr<SlicePrefetchTask> task = std::make_shared<SlicePrefetchTask>(local_cache, remote_storage, read_settings, path);
+    for (int i = 0; i < num_prefetch; i++)
     {
-        SliceManagement::instance().tryToAddBackgroundDownloadTask(local_slice_path, slice_id);
+        int try_to_prefetch = slice_id + skip + i;
+        if (static_cast<size_t>(try_to_prefetch) < vec_slice.size())
+        {
+            task->Add(try_to_prefetch, vec_slice[try_to_prefetch].offset_in_compressed_file, vec_slice[try_to_prefetch].compressed_size);
+        }
+        else
+        {
+            break;
+        }
+    }
+    if (task->Count())
+    {
+        SliceManagement::instance().tryToAddBackgroundPrefetchTask(task);
     }
 }
 
@@ -195,12 +209,23 @@ off_t SliceReadBuffer::switchToSlice(int slice_id, off_t off)
 retry:
     auto metadata = SliceManagement::instance().acquireDownloadSlice(local_slice_path);
     metadata->Lock();
+    /// enum SliceDownloadStatus
+    /// {
+    ///    SLICE_NONE,
+    ///    SLICE_PREFETCH,
+    ///    SLICE_DOWNLOADING,
+    ///    SLICE_DOWNLOADED,
+    ///    SLICE_DELETE,
+    /// };
+    /// SliceDownloadStatus::SLICE_DOWNLOADED
     if (metadata->isDownloaded())
     {
         /// Another thread has loaded this slice.
+        tryToPrefetch(file_path, current_slice);
         LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
     }
-    else if (metadata->isLoading()) /// prefetch or downloading
+    /// SliceDownloadStatus::SLICE_PREFETCH or SliceDownloadStatus::SLICE_DOWNLOADING
+    else if (metadata->isLoading())
     {
         /// TODO wait or prefetch.
         LOG_TRACE(trace_log, "[switch][loading][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
@@ -209,18 +234,20 @@ retry:
             /// wait until this slice has been downloaded.
         }
     }
+    /// SliceDownloadStatus::SLICE_DELETE
     else if (metadata->isDelete())
     {
         LOG_TRACE(trace_log, "[switch][delete][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
         metadata->Unlock();
         goto retry;
     }
+    /// SliceDownloadStatus::SLICE_NONE
     else
     {
         /// Download slice file from storage layer.
         LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
         metadata->setDownloading();
-        /// tryToPrefetch(file_path, current_slice + 1);
+        tryToPrefetch(file_path, current_slice);
         downloadSliceFile(local_slice_path, current_slice);
         metadata->setDownloaded();
     }

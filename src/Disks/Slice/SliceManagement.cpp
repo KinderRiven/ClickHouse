@@ -1,9 +1,17 @@
 #include "SliceManagement.h"
+#include <IO/copyData.h>
 
 #define USE_LRU
 
 namespace DB
 {
+
+String GetLocalSlicePath(const String & path, int slice_id)
+{
+    String slice_path = path + ".slice" + "_" + std::to_string(slice_id);
+    return slice_path;
+}
+
 
 SliceManagement & SliceManagement::instance()
 {
@@ -17,8 +25,8 @@ void SliceManagement::initlizate(ContextPtr context_)
     if (!hasInit)
     {
         context = context_;
-        background_downloads_assignee = std::make_shared<CacheJobsAssignee>(CacheTaskType::CACHE_DOWNLOAD, context->getGlobalContext());
-        background_downloads_assignee->start();
+        background_prefetch_assignee = std::make_shared<CacheJobsAssignee>(CacheTaskType::CACHE_PREFETCH, context->getGlobalContext());
+        background_prefetch_assignee->start();
         background_cleanup_assignee = std::make_shared<CacheJobsAssignee>(CacheTaskType::CACHE_CLEANUP, context->getGlobalContext());
         background_cleanup_assignee->start();
         hasInit = true;
@@ -69,6 +77,10 @@ void SliceManagement::setupLocalCacheDisk(std::shared_ptr<IDisk> local_disk_)
         LOG_TRACE(log, "setup local cache disk : {}", local_disk_->getName());
         local_disk = std::move(local_disk_);
         /// TODO load local caching slice file
+        if (!local_disk->exists("store/"))
+        {
+            local_disk->createDirectories("store/");
+        }
         traverseToLoad(local_disk->getPath());
     }
     else
@@ -130,7 +142,7 @@ SliceManagement::tryToReadSliceFromRemote(const String & key, const ReadSettings
 }
 
 
-std::shared_ptr<SliceDownloadMetadata> SliceManagement::acquireDownloadSlice(const std::string & path)
+SliceManagement::SlicePtr SliceManagement::acquireDownloadSlice(const std::string & path)
 {
     mutex.lock();
     auto it = slice_downloads.find(path);
@@ -168,27 +180,92 @@ std::shared_ptr<SliceDownloadMetadata> SliceManagement::acquireDownloadSlice(con
 }
 
 
-std::shared_ptr<SliceDownloadMetadata> SliceManagement::tryToAddBackgroundDownloadTask(const String & path, int slice_id)
+void SliceManagement::handlePrefetch()
 {
-    auto metadata = acquireDownloadSlice(path);
-    bool try_lock = metadata->tryLock();
-    if (try_lock)
+    prefetch_mutex.lock();
+    while (!prefetch_queue.empty())
     {
-        if (metadata->canDownload())
+        auto front = prefetch_queue.front();
+        auto reader = front->remote_disk->readFile(front->filename, front->read_settings, 0);
+        for (size_t i = 0; i < front->vec_slice.size(); i++)
         {
-            metadata->setPrefetch();
-            LOG_TRACE(log, "Start a prefetch task, path:{}, slice_id:{}.", path, slice_id);
-            background_downloads_assignee->addDownloadTask(path, slice_id, metadata);
-            metadata->Unlock();
-            return metadata;
+            String path = GetLocalSlicePath(front->filename, std::get<0>(front->vec_slice[i]));
+            auto metadata = acquireDownloadSlice(path);
+            bool try_to_lock = metadata->tryLock();
+            if (try_to_lock)
+            {
+                if (metadata->canDownload())
+                {
+                    /// debug print
+                    LOG_TRACE(
+                        log,
+                        "we can prefetch slice : [{}]/[{}]-[{}]-[{}].",
+                        front->filename,
+                        std::get<0>(front->vec_slice[i]),
+                        std::get<1>(front->vec_slice[i]),
+                        std::get<2>(front->vec_slice[i]));
+                    size_t offset = std::get<1>(front->vec_slice[i]);
+                    size_t size = std::get<2>(front->vec_slice[i]);
+
+                    /// create directory if not exists.
+                    metadata->setPrefetch();
+                    auto dir_path = directoryPath(path);
+                    if (!local_disk->exists(dir_path))
+                    {
+                        local_disk->createDirectories(dir_path);
+                    }
+
+                    /// copy
+                    String tmp_path = path + ".tmp";
+                    auto writer = local_disk->writeFile(tmp_path, front->read_settings.local_fs_buffer_size, WriteMode::Rewrite);
+                    reader->seek(static_cast<off_t>(offset), SEEK_SET);
+                    copyData(*reader, *writer, size);
+                    
+                    /// atmoic move
+                    local_disk->moveFile(tmp_path, path);
+                    metadata->setDownloaded();
+                }
+                else
+                {
+                    LOG_TRACE(
+                        log,
+                        "we can not prefetch slice : [{}]/[{}]-[{}]-[{}], because it has been downloaded",
+                        front->filename,
+                        std::get<0>(front->vec_slice[i]),
+                        std::get<1>(front->vec_slice[i]),
+                        std::get<2>(front->vec_slice[i]));
+                }
+                /// else may be any other thread is downloading or downloaded.
+                metadata->Unlock();
+            }
+            else
+            {
+                LOG_TRACE(
+                    log,
+                    "we can not prefetch slice : [{}]/[{}]-[{}]-[{}], because it has been lock",
+                    front->filename,
+                    std::get<0>(front->vec_slice[i]),
+                    std::get<1>(front->vec_slice[i]),
+                    std::get<2>(front->vec_slice[i]));
+            }
         }
-        else
-        {
-            metadata->Unlock();
-            return nullptr;
-        }
+        prefetch_queue.pop();
     }
-    return nullptr;
+    prefetch_mutex.unlock();
+    is_prefetch = false;
+}
+
+
+void SliceManagement::tryToAddBackgroundPrefetchTask(std::shared_ptr<SlicePrefetchTask> task)
+{
+    if (!is_prefetch)
+    {
+        is_prefetch = true;
+        prefetch_mutex.lock();
+        prefetch_queue.push(task);
+        prefetch_mutex.unlock();
+        background_prefetch_assignee->trigger();
+    }
 }
 
 
@@ -246,7 +323,7 @@ void SliceManagement::tryToAddBackgroundCleanupTask()
     if (!is_cleanup)
     {
         is_cleanup = true;
-        background_cleanup_assignee->addCleanupTask();
+        background_cleanup_assignee->trigger();
     }
 }
 
