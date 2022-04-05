@@ -200,7 +200,7 @@ retry:
         /// Another thread has loaded this slice.
         LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
     }
-    else if (metadata->isLoading())
+    else if (metadata->isLoading()) /// prefetch or downloading
     {
         /// TODO wait or prefetch.
         LOG_TRACE(trace_log, "[switch][loading][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);

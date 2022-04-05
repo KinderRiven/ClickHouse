@@ -104,7 +104,7 @@ void CacheJobsAssignee::threadFunc()
     }
     else if (type == CacheTaskType::CACHE_CLEANUP)
     {
-        SliceManagement::instance().cleanupWithFIFO();
+        SliceManagement::instance().cleanupMainList();
     }
 }
 

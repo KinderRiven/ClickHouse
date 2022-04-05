@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <list>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -16,7 +17,6 @@ namespace DB
 
 class SliceReadBuffer;
 
-
 enum SliceDownloadStatus
 {
     SLICE_NONE,
@@ -26,7 +26,6 @@ enum SliceDownloadStatus
     SLICE_ERROR,
     SLICE_DELETE,
 };
-
 
 struct SliceDownloadMetadata
 {
@@ -40,6 +39,8 @@ public:
 public:
     SliceDownloadMetadata(size_t size_) : size(size_) { }
 
+    void Access() { access++; }
+
     void setDownloaded() { status = SliceDownloadStatus::SLICE_DOWNLOADED; }
 
     void setPrefetch() { status = SliceDownloadStatus::SLICE_PREFETCH; }
@@ -50,7 +51,7 @@ public:
 
     bool isLoading()
     {
-        if ((status == SliceDownloadStatus::SLICE_DOWNLOADED) || (status == SliceDownloadStatus::SLICE_PREFETCH))
+        if ((status == SliceDownloadStatus::SLICE_DOWNLOADING) || (status == SliceDownloadStatus::SLICE_PREFETCH))
         {
             return true;
         }
@@ -60,6 +61,8 @@ public:
     bool isDownloaded() { return status == SliceDownloadStatus::SLICE_DOWNLOADED ? true : false; }
 
     bool isDelete() { return status == SliceDownloadStatus::SLICE_DELETE ? true : false; }
+
+    bool canDownload() { return status == SliceDownloadStatus::SLICE_NONE ? true : false; }
 
     bool tryLock() { return mutex.try_lock(); }
 
@@ -71,6 +74,10 @@ public:
 
 class SliceManagement
 {
+public:
+    using SlicePtr = std::shared_ptr<SliceDownloadMetadata>;
+    using SliceList = std::list<std::pair<const String, SlicePtr>>;
+
 public:
     static SliceManagement & instance();
 
@@ -86,15 +93,13 @@ public:
     std::unique_ptr<ReadBufferFromFileBase>
     tryToReadSliceFromRemote(const String & key, const ReadSettings & settings = ReadSettings{}, std::optional<size_t> size = {});
 
-    std::shared_ptr<SliceDownloadMetadata> acquireDownloadSlice(const std::string & path);
+    SlicePtr acquireDownloadSlice(const std::string & path);
 
-    std::shared_ptr<SliceDownloadMetadata> tryToAddBackgroundDownloadTask(const String & path, int slice_id);
+    SlicePtr tryToAddBackgroundDownloadTask(const String & path, int slice_id);
 
     void tryToAddBackgroundCleanupTask();
 
-    void cleanupWithFIFO();
-
-    void cleanupWithLRU();
+    void cleanupMainList();
 
 private:
     /// SliceManagement() = default;
@@ -104,7 +109,7 @@ private:
 
 private:
     /// Contains information about currently running file downloads to cache.
-    mutable std::unordered_map<std::string, std::shared_ptr<SliceDownloadMetadata>> slice_downloads;
+    mutable std::unordered_map<std::string, SliceList::iterator> slice_downloads;
 
     /// Protects concurrent downloading files to cache.
     mutable std::mutex mutex;
@@ -129,6 +134,6 @@ private:
 
     bool hasInit = false;
 
-    std::queue<std::pair<const String, std::shared_ptr<SliceDownloadMetadata>>> cleanup_queue;
+    SliceList main_list;
 };
 };

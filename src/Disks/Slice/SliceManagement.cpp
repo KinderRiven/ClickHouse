@@ -1,5 +1,7 @@
 #include "SliceManagement.h"
 
+#define USE_LRU
+
 namespace DB
 {
 
@@ -40,9 +42,13 @@ void SliceManagement::traverseToLoad(const String & path)
                 String slice_fp = fp.substr(pos);
                 size_t file_size = dir_entry.file_size();
                 auto metadata = std::make_shared<SliceDownloadMetadata>(file_size);
-                cleanup_queue.push(std::make_pair(slice_fp, metadata));
+                main_list.push_back(std::make_pair(slice_fp, metadata)); /// push to main list
                 metadata->setDownloaded();
-                slice_downloads[slice_fp] = metadata;
+
+                auto end_iter = main_list.end();
+                std::advance(end_iter, -1);
+                slice_downloads[slice_fp] = end_iter; /// create index
+
                 total_slice_size += file_size;
                 LOG_TRACE(log, "loading exist caching slice file {} / {}", fp, slice_fp);
             }
@@ -130,15 +136,27 @@ std::shared_ptr<SliceDownloadMetadata> SliceManagement::acquireDownloadSlice(con
     auto it = slice_downloads.find(path);
     if (it != slice_downloads.end())
     {
+        auto metadata = it->second->second;
+#ifdef USE_LRU
+        main_list.erase(it->second);
+        main_list.push_back(std::make_pair(path, metadata));
+        auto end_iter = main_list.end();
+        std::advance(end_iter, -1);
+        it->second = end_iter;
+#endif
+        metadata->Access();
         mutex.unlock();
-        it->second->access++;
-        return it->second;
+        return metadata;
     }
+    /// create new metadata entry
     size_t slice_size = 4UL * 1024 * 1024;
     auto metadata = std::make_shared<SliceDownloadMetadata>(slice_size);
-    cleanup_queue.push(std::make_pair(path, metadata));
-    slice_downloads[path] = metadata;
-    metadata->access++;
+    main_list.push_back(std::make_pair(path, metadata)); /// add to main_list
+    auto end_iter = main_list.end();
+    std::advance(end_iter, -1);
+    slice_downloads[path] = end_iter; /// create index
+    metadata->Access();
+
     /// TODO start background cleanup task.
     usage_space_size += slice_size;
     if (usage_space_size > total_space_size)
@@ -156,8 +174,9 @@ std::shared_ptr<SliceDownloadMetadata> SliceManagement::tryToAddBackgroundDownlo
     bool try_lock = metadata->tryLock();
     if (try_lock)
     {
-        if (!metadata->isDownloaded())
+        if (metadata->canDownload())
         {
+            metadata->setPrefetch();
             LOG_TRACE(log, "Start a prefetch task, path:{}, slice_id:{}.", path, slice_id);
             background_downloads_assignee->addDownloadTask(path, slice_id, metadata);
             metadata->Unlock();
@@ -173,13 +192,7 @@ std::shared_ptr<SliceDownloadMetadata> SliceManagement::tryToAddBackgroundDownlo
 }
 
 
-void SliceManagement::cleanupWithLRU()
-{
-    LOG_TRACE(log, "Using LRU to cleanup slice cache {}.", cleanup_queue.size());
-}
-
-
-void SliceManagement::cleanupWithFIFO()
+void SliceManagement::cleanupMainList()
 {
     mutex.lock();
     size_t usage_space_mb = usage_space_size / (1024 * 1024);
@@ -187,26 +200,26 @@ void SliceManagement::cleanupWithFIFO()
     LOG_TRACE(
         log,
         "Using FIFO to cleanup slice cache start, file : {}/{}, usage : {}/{}MB.",
-        cleanup_queue.size(),
+        main_list.size(),
         slice_downloads.size(),
         usage_space_mb,
         total_space_mb);
     {
         size_t max_free_space_size = (128UL * 1024 * 1024);
-        size_t sz = cleanup_queue.size();
+        size_t sz = main_list.size();
         size_t free_space_size = 0;
         for (size_t i = 0; i < sz; i++)
         {
-            cleanup_queue.front().second->Lock();
+            main_list.front().second->Lock();
             {
-                slice_downloads.erase(cleanup_queue.front().first);
-                local_disk->removeFile(cleanup_queue.front().first);
-                free_space_size += cleanup_queue.front().second->size;
-                cleanup_queue.front().second->setDelete();
-                LOG_TRACE(log, "Using FIFO to rm slice {}, access {}.", cleanup_queue.front().first, cleanup_queue.front().second->access);
+                slice_downloads.erase(main_list.front().first);
+                local_disk->removeFile(main_list.front().first);
+                free_space_size += main_list.front().second->size;
+                main_list.front().second->setDelete();
+                LOG_TRACE(log, "Using FIFO to rm slice {}, access {}.", main_list.front().first, main_list.front().second->access);
             }
-            cleanup_queue.front().second->Unlock();
-            cleanup_queue.pop();
+            main_list.front().second->Unlock();
+            main_list.pop_front();
             if (free_space_size >= max_free_space_size)
             {
                 break;
@@ -220,7 +233,7 @@ void SliceManagement::cleanupWithFIFO()
     LOG_TRACE(
         log,
         "Using FIFO to cleanup slice cache finished, file : {}/{}, usage : {}/{}MB.",
-        cleanup_queue.size(),
+        main_list.size(),
         slice_downloads.size(),
         usage_space_mb,
         total_space_mb);
