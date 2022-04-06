@@ -40,12 +40,19 @@ SliceReadBuffer::SliceReadBuffer(
     swap(*remote_data_file); /// start with main data file
     /// hold buffer is remote_data_file,
     /// external buffer is remote_data_file, its buffer is NULL.
+    SliceManagement::instance().setQueryContext(read_settings.current_query_id);
 }
 
 
 SliceReadBuffer::~SliceReadBuffer()
 {
     LOG_TRACE(trace_log, "free slice read buffee.");
+    if (current_slice_metadata != nullptr)
+    {
+        current_slice_metadata->DecRef();
+        LOG_TRACE(trace_log, "[free][query_id:{}][slice_ref:{}]", read_settings.current_query_id, current_slice_metadata->NumRef());
+    }
+    SliceManagement::instance().freeQueryContext(read_settings.current_query_id);
 }
 
 
@@ -207,7 +214,7 @@ off_t SliceReadBuffer::switchToSlice(int slice_id, off_t off)
     String file_path = remote_data_file->getFileName();
     String local_slice_path = getLocalSlicePath(file_path, current_slice);
 retry:
-    auto metadata = SliceManagement::instance().acquireDownloadSlice(local_slice_path);
+    auto metadata = SliceManagement::instance().acquireDownloadSlice(read_settings.current_query_id, local_slice_path);
     metadata->Lock();
     /// enum SliceDownloadStatus
     /// {
@@ -221,14 +228,26 @@ retry:
     if (metadata->isDownloaded())
     {
         /// Another thread has loaded this slice.
-        tryToPrefetch(file_path, current_slice);
-        LOG_TRACE(trace_log, "[switch][downloaded][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
+        /// tryToPrefetch(file_path, current_slice);
+        LOG_TRACE(
+            trace_log,
+            "[switch][query_id:{}][downloaded][file:{}][slice:{}][offset:{}]",
+            read_settings.current_query_id,
+            local_slice_path,
+            slice_id,
+            off);
     }
     /// SliceDownloadStatus::SLICE_PREFETCH or SliceDownloadStatus::SLICE_DOWNLOADING
     else if (metadata->isLoading())
     {
         /// TODO wait or prefetch.
-        LOG_TRACE(trace_log, "[switch][loading][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
+        LOG_TRACE(
+            trace_log,
+            "[switch][query_id:{}][loading][file:{}][slice:{}][offset:{}]",
+            read_settings.current_query_id,
+            local_slice_path,
+            slice_id,
+            off);
         while (!metadata->isLoading())
         {
             /// wait until this slice has been downloaded.
@@ -237,7 +256,13 @@ retry:
     /// SliceDownloadStatus::SLICE_DELETE
     else if (metadata->isDelete())
     {
-        LOG_TRACE(trace_log, "[switch][delete][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
+        LOG_TRACE(
+            trace_log,
+            "[switch][query_id:{}][delete][file:{}][slice:{}][offset:{}]",
+            read_settings.current_query_id,
+            local_slice_path,
+            slice_id,
+            off);
         metadata->Unlock();
         goto retry;
     }
@@ -245,14 +270,43 @@ retry:
     else
     {
         /// Download slice file from storage layer.
-        LOG_TRACE(trace_log, "[switch][downloading][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
+        LOG_TRACE(
+            trace_log,
+            "[switch][query_id:{}][downloading][file:{}][slice:{}][offset:{}]",
+            read_settings.current_query_id,
+            local_slice_path,
+            slice_id,
+            off);
         metadata->setDownloading();
-        tryToPrefetch(file_path, current_slice);
+        /// tryToPrefetch(file_path, current_slice);
         downloadSliceFile(local_slice_path, current_slice);
         metadata->setDownloaded();
     }
+
+    {
+        metadata->SubRef();
+        if (current_slice_metadata != nullptr)
+        {
+            current_slice_metadata->DecRef();
+        }
+        current_slice_metadata = metadata;
+        LOG_TRACE(
+            trace_log,
+            "[switch][query_id:{}][readFile][file:{}][slice:{}][slice_ref:{}]",
+            read_settings.current_query_id,
+            local_slice_path,
+            slice_id,
+            current_slice_metadata->NumRef());
+    }
     metadata->Unlock();
-    LOG_TRACE(trace_log, "[switch][readFile][file:{}][slice:{}][offset:{}]", local_slice_path, slice_id, off);
+
+    LOG_TRACE(
+        trace_log,
+        "[switch][query_id:{}][readFile][file:{}][slice:{}][offset:{}]",
+        read_settings.current_query_id,
+        local_slice_path,
+        slice_id,
+        off);
     current_slice_file = local_cache->readFile(local_slice_path, read_settings, read_size);
     /// important !!!
     swap(*current_slice_file);
@@ -260,7 +314,7 @@ retry:
 }
 
 
-#if 0
+/*
 off_t SliceReadBuffer::switchToSlice(int slice_id, off_t off)
 {
     /// 1.generate slice key
@@ -342,7 +396,7 @@ off_t SliceReadBuffer::switchToSlice(int slice_id, off_t off)
     swap(*current_slice_file);
     return off;
 }
-#endif
+*/
 
 
 off_t SliceReadBuffer::getPosition()

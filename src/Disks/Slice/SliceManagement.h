@@ -34,14 +34,29 @@ struct SliceDownloadMetadata
 public:
     /// Thread waits on this condition if download process is in progress.
     std::mutex mutex;
+
+    String query_id;
+
     std::atomic<int> access = 0;
+
+    std::atomic<int> num_ref = 0;
+
     size_t size = 0;
+
     std::atomic<SliceDownloadStatus> status = SLICE_NONE;
 
 public:
-    SliceDownloadMetadata(size_t size_) : size(size_) { }
+    SliceDownloadMetadata(String & query_id_, size_t size_) : query_id(query_id_), size(size_) { }
+
+    void setQueryId(const String & query_id_) { query_id = query_id_; }
 
     void Access() { access++; }
+
+    void SubRef() { num_ref++; }
+
+    void DecRef() { num_ref--; }
+
+    int NumRef() const { return num_ref; }
 
     void setDownloaded() { status = SliceDownloadStatus::SLICE_DOWNLOADED; }
 
@@ -51,7 +66,7 @@ public:
 
     void setDelete() { status = SliceDownloadStatus::SLICE_DELETE; }
 
-    bool isLoading()
+    bool isLoading() const
     {
         if ((status == SliceDownloadStatus::SLICE_DOWNLOADING) || (status == SliceDownloadStatus::SLICE_PREFETCH))
         {
@@ -60,11 +75,11 @@ public:
         return false;
     }
 
-    bool isDownloaded() { return status == SliceDownloadStatus::SLICE_DOWNLOADED ? true : false; }
+    bool isDownloaded() const { return status == SliceDownloadStatus::SLICE_DOWNLOADED ? true : false; }
 
-    bool isDelete() { return status == SliceDownloadStatus::SLICE_DELETE ? true : false; }
+    bool isDelete() const { return status == SliceDownloadStatus::SLICE_DELETE ? true : false; }
 
-    bool canDownload() { return status == SliceDownloadStatus::SLICE_NONE ? true : false; }
+    bool canDownload() const { return status == SliceDownloadStatus::SLICE_NONE ? true : false; }
 
     bool tryLock() { return mutex.try_lock(); }
 
@@ -78,9 +93,13 @@ struct SlicePrefetchTask
 {
 public:
     std::shared_ptr<IDisk> local_disk;
+
     std::shared_ptr<IDisk> remote_disk;
+
     ReadSettings read_settings;
+
     const String filename;
+
     std::vector<std::tuple<int, size_t, size_t>> vec_slice; /// <slice_id, offset, size>
 
 public:
@@ -103,6 +122,77 @@ public:
     using SliceList = std::list<std::pair<const String, SlicePtr>>;
 
 public:
+    struct SliceListMetadata
+    {
+    public:
+        const String list_name;
+
+        int num_ref = 0;
+
+        size_t usage_space_bytes = 0;
+
+        size_t total_space_bytes = 0;
+
+        std::shared_ptr<SliceList> list;
+
+    public:
+        SliceListMetadata(const String & list_name_, size_t total_space_bytes_)
+            : list_name(list_name_), total_space_bytes(total_space_bytes_)
+        {
+            list = std::make_shared<SliceList>();
+        }
+
+        void SubRef() { num_ref++; }
+
+        void DecRef() { num_ref--; }
+
+        int NumRef() const { return num_ref; }
+
+        void PushBack(const String & path, SlicePtr slice)
+        {
+            usage_space_bytes += slice->size;
+            list->push_back(std::make_pair(path, slice));
+        }
+
+        void Erase(SliceList::iterator & it)
+        {
+            usage_space_bytes -= (it->second->size);
+            list->erase(it);
+        }
+
+        void PopFront()
+        {
+            usage_space_bytes -= (list->front().second->size);
+            list->pop_front();
+        }
+
+        SliceList::iterator LastIterator() const
+        {
+            auto end_iter = list->end();
+            std::advance(end_iter, -1);
+            return end_iter;
+        }
+
+        SliceList::iterator FirstIterator() const { return list->begin(); }
+
+        size_t SliceCount() const { return list->size(); }
+
+        size_t UsageBytes() const { return usage_space_bytes; }
+
+        size_t UsageMB() const { return usage_space_bytes / (1024 * 1024); }
+
+        size_t TotalBytes() const { return total_space_bytes; }
+
+        size_t TotalMB() const { return total_space_bytes / (1024 * 1024); }
+
+        const String & ListName() const { return list_name; }
+
+        std::shared_ptr<SliceList> List() const { return list; }
+
+        bool isFull() { return usage_space_bytes >= total_space_bytes ? true : false; }
+    };
+
+public:
     static SliceManagement & instance();
 
     void initlizate(ContextPtr context_);
@@ -117,7 +207,7 @@ public:
     std::unique_ptr<ReadBufferFromFileBase>
     tryToReadSliceFromRemote(const String & key, const ReadSettings & settings = ReadSettings{}, std::optional<size_t> size = {});
 
-    SlicePtr acquireDownloadSlice(const std::string & path);
+    SlicePtr acquireDownloadSlice(String & query_id, const std::string & path);
 
     void tryToAddBackgroundPrefetchTask(std::shared_ptr<SlicePrefetchTask> task);
 
@@ -127,11 +217,19 @@ public:
 
     void handlePrefetch();
 
+    void setQueryContext(String & query_id);
+
+    void freeQueryContext(String & query_id);
+
 private:
     /// SliceManagement() = default;
     SliceManagement() { total_space_size = 512UL * 1024 * 1024; };
 
     void traverseToLoad(const String & path);
+
+    void listMove(std::shared_ptr<SliceListMetadata> from, std::shared_ptr<SliceListMetadata> to);
+
+    void tryToFreeListSpace(std::shared_ptr<SliceListMetadata> list);
 
 private:
     /// Contains information about currently running file downloads to cache.
@@ -139,6 +237,9 @@ private:
 
     /// Protects concurrent downloading files to cache.
     mutable std::mutex mutex;
+
+    /// list map
+    std::unordered_map<String, std::shared_ptr<SliceListMetadata>> list_map;
 
     /// local cache disk
     std::shared_ptr<IDisk> local_disk;
@@ -151,8 +252,6 @@ private:
 
     /// cleanup
     std::shared_ptr<CacheJobsAssignee> background_cleanup_assignee = nullptr;
-
-    SliceList main_list;
 
     bool is_cleanup = false;
 
@@ -167,9 +266,6 @@ private:
 
     /// total slice cache can use space size
     size_t total_space_size = 0;
-
-    /// usage cspace size
-    size_t usage_space_size = 0;
 
     ContextPtr context = nullptr;
 

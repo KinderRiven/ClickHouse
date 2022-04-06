@@ -6,6 +6,15 @@
 namespace DB
 {
 
+static String main_list_name = "main";
+
+static String prefetch_list_name = "prefetch";
+
+static size_t max_query_cache_size = (128UL * 1024 * 1024);
+
+static size_t max_cache_size = (512UL * 1024 * 1024);
+
+
 String GetLocalSlicePath(const String & path, int slice_id)
 {
     String slice_path = path + ".slice" + "_" + std::to_string(slice_id);
@@ -37,8 +46,14 @@ void SliceManagement::initlizate(ContextPtr context_)
 void SliceManagement::traverseToLoad(const String & path)
 {
     mutex.lock();
-    size_t total_slice_size = 0;
     LOG_TRACE(log, "loading exist caching slice file from path {}.", path);
+    /// creat main list
+    auto main_list = std::make_shared<SliceManagement::SliceListMetadata>(main_list_name, max_cache_size);
+    list_map[main_list_name] = main_list;
+    /// create prefetch list
+    auto prefetch_list = std::make_shared<SliceManagement::SliceListMetadata>(prefetch_list_name, max_cache_size);
+    list_map[prefetch_list_name] = prefetch_list;
+
     for (const fs::directory_entry & dir_entry : fs::recursive_directory_iterator(path))
     {
         if (dir_entry.is_regular_file())
@@ -49,21 +64,15 @@ void SliceManagement::traverseToLoad(const String & path)
             {
                 String slice_fp = fp.substr(pos);
                 size_t file_size = dir_entry.file_size();
-                auto metadata = std::make_shared<SliceDownloadMetadata>(file_size);
-                main_list.push_back(std::make_pair(slice_fp, metadata)); /// push to main list
+                auto metadata = std::make_shared<SliceDownloadMetadata>(main_list_name, file_size);
                 metadata->setDownloaded();
-
-                auto end_iter = main_list.end();
-                std::advance(end_iter, -1);
-                slice_downloads[slice_fp] = end_iter; /// create index
-
-                total_slice_size += file_size;
+                main_list->PushBack(slice_fp, metadata); /// push to main_list
+                slice_downloads[slice_fp] = main_list->LastIterator(); /// add to global_index
                 LOG_TRACE(log, "loading exist caching slice file {} / {}", fp, slice_fp);
             }
         }
     }
-    usage_space_size = total_slice_size;
-    total_slice_size /= (1024 * 1024);
+    size_t total_slice_size = (main_list->UsageBytes() / (1024 * 1024));
     LOG_TRACE(
         log, "loading exist caching slice file finished, total count : {}, total size : {} MB.", slice_downloads.size(), total_slice_size);
     mutex.unlock();
@@ -142,41 +151,44 @@ SliceManagement::tryToReadSliceFromRemote(const String & key, const ReadSettings
 }
 
 
-SliceManagement::SlicePtr SliceManagement::acquireDownloadSlice(const std::string & path)
+SliceManagement::SlicePtr SliceManagement::acquireDownloadSlice(String & query_id, const std::string & path)
 {
     mutex.lock();
     auto it = slice_downloads.find(path);
     if (it != slice_downloads.end())
     {
         auto metadata = it->second->second;
-#ifdef USE_LRU
-        main_list.erase(it->second);
-        main_list.push_back(std::make_pair(path, metadata));
-        auto end_iter = main_list.end();
-        std::advance(end_iter, -1);
-        it->second = end_iter;
-#endif
+        auto query_list = list_map[it->second->second->query_id];
+        /// LRU
+        query_list->Erase(it->second);
+        query_list->PushBack(path, metadata);
+        auto end_iter = query_list->LastIterator();
+        it->second = end_iter; /// update global_index
+        /// update access count for LFU
         metadata->Access();
         mutex.unlock();
         return metadata;
     }
-    /// create new metadata entry
-    size_t slice_size = 4UL * 1024 * 1024;
-    auto metadata = std::make_shared<SliceDownloadMetadata>(slice_size);
-    main_list.push_back(std::make_pair(path, metadata)); /// add to main_list
-    auto end_iter = main_list.end();
-    std::advance(end_iter, -1);
-    slice_downloads[path] = end_iter; /// create index
-    metadata->Access();
-
-    /// TODO start background cleanup task.
-    usage_space_size += slice_size;
-    if (usage_space_size > total_space_size)
+    else
     {
-        tryToAddBackgroundCleanupTask();
+        /// create new metadata entry
+        size_t slice_size = 4UL * 1024 * 1024;
+        auto metadata = std::make_shared<SliceDownloadMetadata>(query_id, slice_size);
+        auto query_list = list_map[metadata->query_id];
+        /// LRU
+        query_list->PushBack(path, metadata); /// add to main_list
+        auto end_iter = query_list->LastIterator();
+        slice_downloads[path] = end_iter; /// create index
+        /// update access count for LFU
+        metadata->Access();
+        /// maybe cleanup task.
+        if (query_list->isFull())
+        {
+            tryToFreeListSpace(query_list);
+        }
+        mutex.unlock();
+        return metadata;
     }
-    mutex.unlock();
-    return metadata;
 }
 
 
@@ -190,7 +202,7 @@ void SliceManagement::handlePrefetch()
         for (size_t i = 0; i < front->vec_slice.size(); i++)
         {
             String path = GetLocalSlicePath(front->filename, std::get<0>(front->vec_slice[i]));
-            auto metadata = acquireDownloadSlice(path);
+            auto metadata = acquireDownloadSlice(prefetch_list_name, path);
             bool try_to_lock = metadata->tryLock();
             if (try_to_lock)
             {
@@ -220,7 +232,7 @@ void SliceManagement::handlePrefetch()
                     auto writer = local_disk->writeFile(tmp_path, front->read_settings.local_fs_buffer_size, WriteMode::Rewrite);
                     reader->seek(static_cast<off_t>(offset), SEEK_SET);
                     copyData(*reader, *writer, size);
-                    
+
                     /// atmoic move
                     local_disk->moveFile(tmp_path, path);
                     metadata->setDownloaded();
@@ -269,48 +281,101 @@ void SliceManagement::tryToAddBackgroundPrefetchTask(std::shared_ptr<SlicePrefet
 }
 
 
+void SliceManagement::tryToFreeListSpace(std::shared_ptr<SliceManagement::SliceListMetadata> list)
+{
+    size_t usage_space_mb = list->UsageMB();
+    size_t total_space_mb = list->TotalMB();
+    LOG_TRACE(log, "[start] Using LRU to cleanup {} list, usage : {}/{}MB.", list->ListName(), usage_space_mb, total_space_mb);
+    {
+        size_t need_to_free = list->UsageBytes() - list->TotalBytes();
+        size_t has_free = 0;
+        size_t sz = list->SliceCount();
+        for (size_t i = 0; i < sz; i++)
+        {
+            auto begin_iter = list->FirstIterator();
+            auto path = begin_iter->first;
+            auto metadata = begin_iter->second;
+            metadata->Lock();
+            if (!metadata->NumRef())
+            {
+                metadata->setDelete();
+                slice_downloads.erase(path);
+                local_disk->removeFile(path);
+                has_free += metadata->size;
+                list->PopFront();
+            }
+            else
+            {
+                list->PushBack(path, metadata);
+                slice_downloads[path] = list->LastIterator();
+                list->PopFront();
+            }
+            metadata->Unlock();
+            if (has_free >= need_to_free)
+            {
+                break;
+            }
+        }
+    }
+    usage_space_mb = list->UsageMB();
+    total_space_mb = list->TotalMB();
+    LOG_TRACE(log, "[end] Using LRU to cleanup {} list, usage : {}/{}MB.", list->ListName(), usage_space_mb, total_space_mb);
+}
+
+
 void SliceManagement::cleanupMainList()
 {
     mutex.lock();
-    size_t usage_space_mb = usage_space_size / (1024 * 1024);
-    size_t total_space_mb = total_space_size / (1024 * 1024);
+    auto main_list = list_map[main_list_name];
+    size_t usage_space_mb = main_list->UsageMB();
+    size_t total_space_mb = main_list->TotalMB();
     LOG_TRACE(
         log,
-        "Using FIFO to cleanup slice cache start, file : {}/{}, usage : {}/{}MB.",
-        main_list.size(),
+        "[start] Using LRU to cleanup main list, file : {}/{}, usage : {}/{}MB.",
+        main_list->SliceCount(),
         slice_downloads.size(),
         usage_space_mb,
         total_space_mb);
+
     {
         size_t max_free_space_size = (128UL * 1024 * 1024);
-        size_t sz = main_list.size();
+        size_t sz = main_list->SliceCount();
         size_t free_space_size = 0;
         for (size_t i = 0; i < sz; i++)
         {
-            main_list.front().second->Lock();
+            auto begin_iter = main_list->FirstIterator();
+            auto path = begin_iter->first;
+            auto metadata = begin_iter->second;
+            metadata->Lock();
+            if (!metadata->NumRef())
             {
-                slice_downloads.erase(main_list.front().first);
-                local_disk->removeFile(main_list.front().first);
-                free_space_size += main_list.front().second->size;
-                main_list.front().second->setDelete();
-                LOG_TRACE(log, "Using FIFO to rm slice {}, access {}.", main_list.front().first, main_list.front().second->access);
+                metadata->setDelete();
+                slice_downloads.erase(path);
+                local_disk->removeFile(path);
+                free_space_size += metadata->size;
+                main_list->PopFront();
             }
-            main_list.front().second->Unlock();
-            main_list.pop_front();
+            else
+            {
+                main_list->PushBack(path, metadata);
+                slice_downloads[path] = main_list->LastIterator();
+                main_list->PopFront();
+            }
+            metadata->Unlock();
             if (free_space_size >= max_free_space_size)
             {
                 break;
             }
         }
-        usage_space_size -= free_space_size;
         is_cleanup = false;
     }
-    usage_space_mb = usage_space_size / (1024 * 1024);
-    total_space_mb = total_space_size / (1024 * 1024);
+
+    usage_space_mb = main_list->UsageMB();
+    total_space_mb = main_list->TotalMB();
     LOG_TRACE(
         log,
-        "Using FIFO to cleanup slice cache finished, file : {}/{}, usage : {}/{}MB.",
-        main_list.size(),
+        "[end] Using LRU to cleanup main list, file : {}/{}, usage : {}/{}MB.",
+        main_list->SliceCount(),
         slice_downloads.size(),
         usage_space_mb,
         total_space_mb);
@@ -327,4 +392,80 @@ void SliceManagement::tryToAddBackgroundCleanupTask()
     }
 }
 
+
+void SliceManagement::setQueryContext(String & query_id)
+{
+    mutex.lock();
+    auto it = list_map.find(query_id);
+    if (it != list_map.end())
+    {
+        it->second->SubRef();
+        LOG_TRACE(log, "[set query context][update][query_id:{}][num_open_file:{}]", query_id, it->second->NumRef());
+    }
+    else
+    {
+        /// this is new query
+        auto new_list = std::make_shared<SliceManagement::SliceListMetadata>(query_id, max_query_cache_size);
+        list_map[query_id] = new_list;
+        new_list->SubRef();
+        LOG_TRACE(log, "[set query context][open:{}][query_id:{}][num_open_file:{}]", query_id, list_map.size(), new_list->NumRef());
+    }
+    mutex.unlock();
+}
+
+
+void SliceManagement::listMove(
+    std::shared_ptr<SliceManagement::SliceListMetadata> from, std::shared_ptr<SliceManagement::SliceListMetadata> to)
+{
+    LOG_TRACE(
+        log,
+        "start move list from [query_id:{}][size:{}] to [query_id:{}][size:{}].",
+        from->ListName(),
+        from->SliceCount(),
+        to->ListName(),
+        to->SliceCount());
+    auto from_list = from->List();
+    for (auto iter = from_list->begin(); iter != from_list->end(); iter++)
+    {
+        /// modify slice query_id.
+        to->PushBack(iter->first, iter->second);
+        iter->second->setQueryId(to->ListName());
+        /// update global index
+        auto end_iter = to->LastIterator();
+        slice_downloads[iter->first] = end_iter; /// create index
+    }
+    LOG_TRACE(
+        log,
+        "finish move list from [query_id:{}][size:{}] to [query_id:{}][size:{}].",
+        from->ListName(),
+        from->SliceCount(),
+        to->ListName(),
+        to->SliceCount());
+}
+
+
+void SliceManagement::freeQueryContext(String & query_id)
+{
+    mutex.lock();
+    auto it = list_map.find(query_id);
+    if (it != list_map.end())
+    {
+        auto query_list = it->second;
+        query_list->DecRef();
+        LOG_TRACE(log, "[free query context][delete][query_id:{}][num_open_file:{}]", query_id, query_list->NumRef());
+        if (!query_list->NumRef())
+        {
+            auto from_list = list_map[query_id];
+            auto to_list = list_map[main_list_name];
+            listMove(from_list, to_list);
+            list_map.erase(query_id);
+            /// try to start a background GC task.
+            if (to_list->isFull())
+            {
+                tryToAddBackgroundCleanupTask();
+            }
+        }
+    }
+    mutex.unlock();
+}
 };

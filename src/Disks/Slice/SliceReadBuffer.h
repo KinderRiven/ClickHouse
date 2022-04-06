@@ -80,7 +80,6 @@ public:
 
     void uploadSliceFile(const String & local_path, const String & remote_path);
 
-
 private:
     int current_slice = -1;
 
@@ -97,6 +96,8 @@ private:
     std::vector<Slice> vec_slice;
 
     std::unique_ptr<ReadBufferFromFileBase> current_slice_file;
+
+    std::shared_ptr<SliceDownloadMetadata> current_slice_metadata = nullptr;
 
     ReadSettings read_settings;
 
