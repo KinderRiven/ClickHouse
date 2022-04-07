@@ -192,6 +192,93 @@ public:
         bool isFull() { return usage_space_bytes >= total_space_bytes ? true : false; }
     };
 
+    /// record a query cache result.
+    struct QueryStats
+    {
+    public:
+        size_t cache_hit = 0;
+
+        size_t cache_miss = 0;
+
+    public:
+        double HitRatio() const
+        {
+            size_t total_access_count = cache_hit + cache_miss;
+            if (!total_access_count)
+            {
+                return 0.0;
+            }
+            else
+            {
+                return ((1.0 * cache_hit) / total_access_count);
+            }
+        }
+
+        void Hit() { cache_hit++; }
+
+        void Miss() { cache_miss++; }
+    };
+
+    /// cache stat
+    struct CacheStats
+    {
+    public:
+        std::unordered_map<String, std::shared_ptr<QueryStats>> stats;
+
+        size_t prefetch_count = 0;
+
+        size_t prefetch_hit = 0;
+
+    public:
+        void addQueryHit(const String & query_id)
+        {
+            auto iter = stats.find(query_id);
+            if (iter == stats.end())
+            {
+                stats[query_id] = std::make_shared<QueryStats>();
+                iter = stats.find(query_id);
+            }
+            iter->second->Hit();
+        }
+
+        void addQueryMiss(const String & query_id)
+        {
+            auto iter = stats.find(query_id);
+            if (iter == stats.end())
+            {
+                stats[query_id] = std::make_shared<QueryStats>();
+                iter = stats.find(query_id);
+            }
+            iter->second->Miss();
+        }
+
+        double getQueryHitRatio(const String & query_id) const
+        {
+            auto iter = stats.find(query_id);
+            if (iter == stats.end())
+            {
+                return 0.0;
+            }
+            return iter->second->HitRatio();
+        }
+
+        void addPrefetch(size_t num) { prefetch_count += num; }
+
+        void addPrefetchHit() { prefetch_hit++; }
+
+        double getPrefetchHitRatio()
+        {
+            if (prefetch_count == 0)
+            {
+                return 0.0;
+            }
+            else
+            {
+                return ((1.0 * prefetch_hit) / prefetch_count);
+            }
+        }
+    };
+
 public:
     static SliceManagement & instance();
 
@@ -270,5 +357,7 @@ private:
     ContextPtr context = nullptr;
 
     bool hasInit = false;
+
+    CacheStats stats;
 };
 };

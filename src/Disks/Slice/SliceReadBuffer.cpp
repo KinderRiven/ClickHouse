@@ -228,7 +228,7 @@ retry:
     if (metadata->isDownloaded())
     {
         /// Another thread has loaded this slice.
-        /// tryToPrefetch(file_path, current_slice);
+        tryToPrefetch(file_path, current_slice);
         LOG_TRACE(
             trace_log,
             "[switch][query_id:{}][downloaded][file:{}][slice:{}][offset:{}]",
@@ -278,7 +278,7 @@ retry:
             slice_id,
             off);
         metadata->setDownloading();
-        /// tryToPrefetch(file_path, current_slice);
+        tryToPrefetch(file_path, current_slice);
         downloadSliceFile(local_slice_path, current_slice);
         metadata->setDownloaded();
     }

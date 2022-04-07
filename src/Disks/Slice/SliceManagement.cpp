@@ -170,11 +170,17 @@ SliceManagement::SlicePtr SliceManagement::acquireDownloadSlice(String & query_i
     /// This slice has been created.
     if (it != slice_downloads.end())
     {
+        stats.addQueryHit(query_id);
+
         String list_name = it->second->second->query_id;
         auto metadata = it->second->second;
         /// This slice in prefetch list, thus, we need to move it to query_id_list.
         if (list_name == prefetch_list_name)
         {
+            if (query_id != prefetch_list_name)
+            {
+                stats.addPrefetchHit();
+            }
             auto from_list = list_map[prefetch_list_name];
             auto to_list = list_map[query_id];
             /// DEBUG
@@ -209,6 +215,8 @@ SliceManagement::SlicePtr SliceManagement::acquireDownloadSlice(String & query_i
     }
     else
     {
+        stats.addQueryMiss(query_id);
+
         /// create new metadata entry
         size_t slice_size = 4UL * 1024 * 1024;
         auto metadata = std::make_shared<SliceDownloadMetadata>(query_id, slice_size);
@@ -246,6 +254,7 @@ void SliceManagement::handlePrefetch()
             {
                 if (metadata->canDownload())
                 {
+                    stats.addPrefetch(1);
                     /// debug print
                     LOG_TRACE(
                         log,
@@ -505,6 +514,13 @@ void SliceManagement::freeQueryContext(String & query_id)
             auto from_list = list_map[query_id];
             auto to_list = list_map[main_list_name];
             listMove(from_list, to_list);
+            /// debug to print query statistics.
+            LOG_TRACE(
+                log,
+                "[query statistic][query:{}][cache_hit:{}][prefetch hit:{}]",
+                query_id,
+                stats.getQueryHitRatio(query_id),
+                stats.getPrefetchHitRatio());
             list_map.erase(query_id);
             /// try to start a background GC task.
             if (to_list->isFull())
