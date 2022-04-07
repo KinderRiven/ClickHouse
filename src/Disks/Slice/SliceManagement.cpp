@@ -6,13 +6,25 @@
 namespace DB
 {
 
+/// main list name
+/// list_map["main"] = main_list;
 static String main_list_name = "main";
 
+/// prefetch list name
+/// list_map["prefetch"] = prefetch_list;
 static String prefetch_list_name = "prefetch";
 
-static size_t max_query_cache_size = (128UL * 1024 * 1024);
+/// max prefetch list size
+static size_t max_prefetch_size = (512UL * 1024 * 1024);
+/// static size_t max_prefetch_size = (64UL * 1024 * 1024);
 
-static size_t max_cache_size = (512UL * 1024 * 1024);
+/// max list size for each query
+static size_t max_query_cache_size = (2UL * 1024 * 1024 * 1024);
+/// static size_t max_query_cache_size = (128UL * 1024 * 1024);
+
+/// max main list size
+static size_t max_cache_size = (10UL * 1024 * 1024 * 1024);
+/// static size_t max_cache_size = (512UL * 1024 * 1024);
 
 
 String GetLocalSlicePath(const String & path, int slice_id)
@@ -51,7 +63,7 @@ void SliceManagement::traverseToLoad(const String & path)
     auto main_list = std::make_shared<SliceManagement::SliceListMetadata>(main_list_name, max_cache_size);
     list_map[main_list_name] = main_list;
     /// create prefetch list
-    auto prefetch_list = std::make_shared<SliceManagement::SliceListMetadata>(prefetch_list_name, max_cache_size);
+    auto prefetch_list = std::make_shared<SliceManagement::SliceListMetadata>(prefetch_list_name, max_prefetch_size);
     list_map[prefetch_list_name] = prefetch_list;
 
     for (const fs::directory_entry & dir_entry : fs::recursive_directory_iterator(path))
@@ -155,15 +167,41 @@ SliceManagement::SlicePtr SliceManagement::acquireDownloadSlice(String & query_i
 {
     mutex.lock();
     auto it = slice_downloads.find(path);
+    /// This slice has been created.
     if (it != slice_downloads.end())
     {
+        String list_name = it->second->second->query_id;
         auto metadata = it->second->second;
-        auto query_list = list_map[it->second->second->query_id];
-        /// LRU
-        query_list->Erase(it->second);
-        query_list->PushBack(path, metadata);
-        auto end_iter = query_list->LastIterator();
-        it->second = end_iter; /// update global_index
+        /// This slice in prefetch list, thus, we need to move it to query_id_list.
+        if (list_name == prefetch_list_name)
+        {
+            auto from_list = list_map[prefetch_list_name];
+            auto to_list = list_map[query_id];
+            /// DEBUG
+            LOG_TRACE(
+                log,
+                "hit prefetch cache {}, then move it to {}, current prefetch cache {}/{}MB.",
+                path,
+                query_id,
+                from_list->UsageMB(),
+                from_list->TotalMB());
+            /// TODO move
+            from_list->Erase(it->second);
+            to_list->PushBack(path, metadata);
+            metadata->setQueryId(query_id); /// reset its list to current query list.
+            auto end_iter = to_list->LastIterator();
+            it->second = end_iter; /// update global_index
+        }
+        /// This slice in query_id_list or main_list.
+        else
+        {
+            auto query_list = list_map[list_name];
+            /// LRU
+            query_list->Erase(it->second);
+            query_list->PushBack(path, metadata);
+            auto end_iter = query_list->LastIterator();
+            it->second = end_iter; /// update global_index
+        }
         /// update access count for LFU
         metadata->Access();
         mutex.unlock();
@@ -226,7 +264,6 @@ void SliceManagement::handlePrefetch()
                     {
                         local_disk->createDirectories(dir_path);
                     }
-
                     /// copy
                     String tmp_path = path + ".tmp";
                     auto writer = local_disk->writeFile(tmp_path, front->read_settings.local_fs_buffer_size, WriteMode::Rewrite);
@@ -327,15 +364,21 @@ void SliceManagement::cleanupMainList()
 {
     mutex.lock();
     auto main_list = list_map[main_list_name];
-    size_t usage_space_mb = main_list->UsageMB();
-    size_t total_space_mb = main_list->TotalMB();
+    auto prefetch_list = list_map[prefetch_list_name];
+
+    LOG_TRACE(
+        log,
+        "[start] Using LRU to cleanup prefetch list : {}, usage : {}/{}MB.",
+        prefetch_list->SliceCount(),
+        prefetch_list->UsageMB(),
+        prefetch_list->TotalMB());
     LOG_TRACE(
         log,
         "[start] Using LRU to cleanup main list, file : {}/{}, usage : {}/{}MB.",
         main_list->SliceCount(),
         slice_downloads.size(),
-        usage_space_mb,
-        total_space_mb);
+        main_list->UsageMB(),
+        main_list->TotalMB());
 
     {
         size_t max_free_space_size = (128UL * 1024 * 1024);
@@ -370,15 +413,19 @@ void SliceManagement::cleanupMainList()
         is_cleanup = false;
     }
 
-    usage_space_mb = main_list->UsageMB();
-    total_space_mb = main_list->TotalMB();
+    LOG_TRACE(
+        log,
+        "[end] Using LRU to cleanup prefetch list : {}, usage : {}/{}MB.",
+        prefetch_list->SliceCount(),
+        prefetch_list->UsageMB(),
+        prefetch_list->TotalMB());
     LOG_TRACE(
         log,
         "[end] Using LRU to cleanup main list, file : {}/{}, usage : {}/{}MB.",
         main_list->SliceCount(),
         slice_downloads.size(),
-        usage_space_mb,
-        total_space_mb);
+        main_list->UsageMB(),
+        main_list->TotalMB());
     mutex.unlock();
 }
 
