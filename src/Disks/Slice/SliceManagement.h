@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <ctime>
 #include <list>
 #include <mutex>
 #include <string>
@@ -15,6 +16,8 @@
 
 namespace DB
 {
+
+/// #define SLICE_DEBUG
 
 class SliceReadBuffer;
 
@@ -219,11 +222,41 @@ public:
         void Miss() { cache_miss++; }
     };
 
+    /// record a slice cache result
+    struct SliceStats
+    {
+    public:
+        size_t cache_hit = 0;
+
+        size_t cache_miss = 0;
+
+    public:
+        double HitRatio() const
+        {
+            size_t total_access_count = cache_hit + cache_miss;
+            if (!total_access_count)
+            {
+                return 0.0;
+            }
+            else
+            {
+                return ((1.0 * cache_hit) / total_access_count);
+            }
+        }
+
+        void Hit() { cache_hit++; }
+
+        void Miss() { cache_miss++; }
+    };
+
+
     /// cache stat
     struct CacheStats
     {
     public:
-        std::unordered_map<String, std::shared_ptr<QueryStats>> stats;
+        std::unordered_map<String, std::shared_ptr<QueryStats>> query_stats;
+
+        std::unordered_map<String, std::shared_ptr<SliceStats>> slice_stats;
 
         size_t prefetch_count = 0;
 
@@ -232,34 +265,56 @@ public:
     public:
         void addQueryHit(const String & query_id)
         {
-            auto iter = stats.find(query_id);
-            if (iter == stats.end())
+            auto iter = query_stats.find(query_id);
+            if (iter == query_stats.end())
             {
-                stats[query_id] = std::make_shared<QueryStats>();
-                iter = stats.find(query_id);
+                query_stats[query_id] = std::make_shared<QueryStats>();
+                iter = query_stats.find(query_id);
             }
             iter->second->Hit();
         }
 
         void addQueryMiss(const String & query_id)
         {
-            auto iter = stats.find(query_id);
-            if (iter == stats.end())
+            auto iter = query_stats.find(query_id);
+            if (iter == query_stats.end())
             {
-                stats[query_id] = std::make_shared<QueryStats>();
-                iter = stats.find(query_id);
+                query_stats[query_id] = std::make_shared<QueryStats>();
+                iter = query_stats.find(query_id);
             }
             iter->second->Miss();
         }
 
         double getQueryHitRatio(const String & query_id) const
         {
-            auto iter = stats.find(query_id);
-            if (iter == stats.end())
+            auto iter = query_stats.find(query_id);
+            if (iter == query_stats.end())
             {
                 return 0.0;
             }
             return iter->second->HitRatio();
+        }
+
+        void addSliceHit(const String & slice)
+        {
+            auto iter = slice_stats.find(slice);
+            if (iter == slice_stats.end())
+            {
+                slice_stats[slice] = std::make_shared<SliceStats>();
+                iter = slice_stats.find(slice);
+            }
+            iter->second->Hit();
+        }
+
+        void addSliceMiss(const String & slice)
+        {
+            auto iter = slice_stats.find(slice);
+            if (iter == slice_stats.end())
+            {
+                slice_stats[slice] = std::make_shared<SliceStats>();
+                iter = slice_stats.find(slice);
+            }
+            iter->second->Miss();
         }
 
         void addPrefetch(size_t num) { prefetch_count += num; }
@@ -276,6 +331,25 @@ public:
             {
                 return ((1.0 * prefetch_hit) / prefetch_count);
             }
+        }
+
+        void generateTraceToDisk(const String & path, std::shared_ptr<IDisk> disk)
+        {
+            auto writer = disk->writeFile(path, 1048576UL, WriteMode::Rewrite);
+            for (auto & stat : slice_stats)
+            {
+                /// -----------------------------------------------------
+                /// | entry_size | slice_name |  hit count | miss count |
+                /// -----------------------------------------------------
+                auto current_name = stat.first;
+                auto current_stat = stat.second;
+                size_t entry_size = current_name.size() + sizeof(SliceStats);
+                writer->write(reinterpret_cast<const char *>(&entry_size), sizeof(entry_size));
+                writer->write(reinterpret_cast<const char *>(current_name.c_str()), current_name.size());
+                writer->write(reinterpret_cast<const char *>(current_stat.get()), sizeof(SliceStats));
+            }
+            writer->finalize();
+            slice_stats.clear();
         }
     };
 
@@ -311,6 +385,21 @@ public:
 private:
     /// SliceManagement() = default;
     SliceManagement() { total_space_size = 512UL * 1024 * 1024; };
+
+    ~SliceManagement()
+    {
+        time_t now = time(nullptr);
+        auto cstr_time = ctime(&now);
+        String log_name = String(cstr_time, strlen(cstr_time) - 1) + ".slice_trace";
+        for (size_t i = 0; i < log_name.size(); i++)
+        {
+            if (log_name[i] == ':' || log_name[i] == ' ')
+            {
+                log_name[i] = '_';
+            }
+        }
+        stats.generateTraceToDisk(log_name, local_disk);
+    }
 
     void traverseToLoad(const String & path);
 
@@ -358,6 +447,7 @@ private:
 
     bool hasInit = false;
 
+    /// record cache stat
     CacheStats stats;
 };
 };

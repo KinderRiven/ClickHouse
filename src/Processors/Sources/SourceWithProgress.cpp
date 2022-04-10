@@ -1,12 +1,12 @@
-#include <Processors/Sources/SourceWithProgress.h>
-
-#include <Interpreters/ProcessList.h>
 #include <Access/EnabledQuota.h>
+#include <Interpreters/ProcessList.h>
+#include <Processors/Sources/SourceWithProgress.h>
+#include <Common/Stopwatch.h>
 
 namespace ProfileEvents
 {
-    extern const Event SelectedRows;
-    extern const Event SelectedBytes;
+extern const Event SelectedRows;
+extern const Event SelectedBytes;
 }
 
 namespace DB
@@ -54,6 +54,10 @@ bool SourceWithProgress::checkTimeLimit() const
 
 void SourceWithProgress::work()
 {
+#ifdef COLLECT_PROCESSOR_STATS
+    Stopwatch watch;
+    watch.start();
+#endif
     if (!checkTimeLimit())
     {
         cancel();
@@ -65,8 +69,12 @@ void SourceWithProgress::work()
         ISourceWithProgress::work();
 
         if (auto_progress && !was_progress_called && has_input)
-            progress({ current_chunk.chunk.getNumRows(), current_chunk.chunk.bytes() });
+            progress({current_chunk.chunk.getNumRows(), current_chunk.chunk.bytes()});
     }
+#ifdef COLLECT_PROCESSOR_STATS
+    watch.stop();
+    collect(watch.elapsedSeconds());
+#endif
 }
 
 /// TODO: Most of this must be done in PipelineExecutor outside.
@@ -114,15 +122,23 @@ void SourceWithProgress::progress(const Progress & value)
 
         if (limits.mode == LimitsMode::LIMITS_TOTAL)
         {
-            if (!limits.size_limits.check(rows_to_check_limit, progress.read_bytes, "rows or bytes to read",
-                                          ErrorCodes::TOO_MANY_ROWS, ErrorCodes::TOO_MANY_BYTES))
+            if (!limits.size_limits.check(
+                    rows_to_check_limit,
+                    progress.read_bytes,
+                    "rows or bytes to read",
+                    ErrorCodes::TOO_MANY_ROWS,
+                    ErrorCodes::TOO_MANY_BYTES))
             {
                 cancel();
             }
         }
 
-        if (!leaf_limits.check(rows_to_check_limit, progress.read_bytes, "rows or bytes to read on leaf node",
-                                          ErrorCodes::TOO_MANY_ROWS, ErrorCodes::TOO_MANY_BYTES))
+        if (!leaf_limits.check(
+                rows_to_check_limit,
+                progress.read_bytes,
+                "rows or bytes to read on leaf node",
+                ErrorCodes::TOO_MANY_ROWS,
+                ErrorCodes::TOO_MANY_BYTES))
         {
             cancel();
         }

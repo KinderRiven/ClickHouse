@@ -1,7 +1,7 @@
+#include <Interpreters/Context.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeReadPool.h>
 #include <Storages/MergeTree/MergeTreeThreadSelectProcessor.h>
-#include <Interpreters/Context.h>
 
 
 namespace DB
@@ -22,13 +22,9 @@ MergeTreeThreadSelectProcessor::MergeTreeThreadSelectProcessor(
     ExpressionActionsSettings actions_settings,
     const MergeTreeReaderSettings & reader_settings_,
     const Names & virt_column_names_)
-    :
-    MergeTreeBaseSelectProcessor{
-        pool_->getHeader(), storage_, metadata_snapshot_, prewhere_info_, std::move(actions_settings), max_block_size_rows_,
-        preferred_block_size_bytes_, preferred_max_column_in_block_size_bytes_,
-        reader_settings_, use_uncompressed_cache_, virt_column_names_},
-    thread{thread_},
-    pool{pool_}
+    : MergeTreeBaseSelectProcessor{pool_->getHeader(), storage_, metadata_snapshot_, prewhere_info_, std::move(actions_settings), max_block_size_rows_, preferred_block_size_bytes_, preferred_max_column_in_block_size_bytes_, reader_settings_, use_uncompressed_cache_, virt_column_names_}
+    , thread{thread_}
+    , pool{pool_}
 {
     /// round min_marks_to_read up to nearest multiple of block_size expressed in marks
     /// If granularity is adaptive it doesn't make sense
@@ -36,8 +32,8 @@ MergeTreeThreadSelectProcessor::MergeTreeThreadSelectProcessor(
     if (max_block_size_rows && !storage.canUseAdaptiveGranularity())
     {
         size_t fixed_index_granularity = storage.getSettings()->index_granularity;
-        min_marks_to_read = (min_marks_to_read_ * fixed_index_granularity + max_block_size_rows - 1)
-            / max_block_size_rows * max_block_size_rows / fixed_index_granularity;
+        min_marks_to_read = (min_marks_to_read_ * fixed_index_granularity + max_block_size_rows - 1) / max_block_size_rows
+            * max_block_size_rows / fixed_index_granularity;
     }
     else
         min_marks_to_read = min_marks_to_read_;
@@ -72,14 +68,26 @@ bool MergeTreeThreadSelectProcessor::getNewTask()
             owned_uncompressed_cache = storage.getContext()->getUncompressedCache();
         owned_mark_cache = storage.getContext()->getMarkCache();
 
-        reader = task->data_part->getReader(task->columns, metadata_snapshot, task->mark_ranges,
-            owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings,
-            IMergeTreeReader::ValueSizeMap{}, profile_callback);
+        reader = task->data_part->getReader(
+            task->columns,
+            metadata_snapshot,
+            task->mark_ranges,
+            owned_uncompressed_cache.get(),
+            owned_mark_cache.get(),
+            reader_settings,
+            IMergeTreeReader::ValueSizeMap{},
+            profile_callback);
 
         if (prewhere_info)
-            pre_reader = task->data_part->getReader(task->pre_columns, metadata_snapshot, task->mark_ranges,
-                owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings,
-                IMergeTreeReader::ValueSizeMap{}, profile_callback);
+            pre_reader = task->data_part->getReader(
+                task->pre_columns,
+                metadata_snapshot,
+                task->mark_ranges,
+                owned_uncompressed_cache.get(),
+                owned_mark_cache.get(),
+                reader_settings,
+                IMergeTreeReader::ValueSizeMap{},
+                profile_callback);
     }
     else
     {
@@ -87,14 +95,26 @@ bool MergeTreeThreadSelectProcessor::getNewTask()
         if (part_name != last_readed_part_name)
         {
             /// retain avg_value_size_hints
-            reader = task->data_part->getReader(task->columns, metadata_snapshot, task->mark_ranges,
-                owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings,
-                reader->getAvgValueSizeHints(), profile_callback);
+            reader = task->data_part->getReader(
+                task->columns,
+                metadata_snapshot,
+                task->mark_ranges,
+                owned_uncompressed_cache.get(),
+                owned_mark_cache.get(),
+                reader_settings,
+                reader->getAvgValueSizeHints(),
+                profile_callback);
 
             if (prewhere_info)
-                pre_reader = task->data_part->getReader(task->pre_columns, metadata_snapshot, task->mark_ranges,
-                owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings,
-                reader->getAvgValueSizeHints(), profile_callback);
+                pre_reader = task->data_part->getReader(
+                    task->pre_columns,
+                    metadata_snapshot,
+                    task->mark_ranges,
+                    owned_uncompressed_cache.get(),
+                    owned_mark_cache.get(),
+                    reader_settings,
+                    reader->getAvgValueSizeHints(),
+                    profile_callback);
         }
     }
 
@@ -104,6 +124,14 @@ bool MergeTreeThreadSelectProcessor::getNewTask()
 }
 
 
-MergeTreeThreadSelectProcessor::~MergeTreeThreadSelectProcessor() = default;
+MergeTreeThreadSelectProcessor::~MergeTreeThreadSelectProcessor()
+{
+    double total_time = 0;
+    for (auto & it : vec_run_times)
+    {
+        total_time += it;
+    }
+    LOG_TRACE(trace_log, "Processor [{}] run count : {}, time : {}", getName(), vec_run_times.size(), total_time);
+}
 
 }

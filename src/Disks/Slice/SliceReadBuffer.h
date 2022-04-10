@@ -103,6 +103,6 @@ private:
 
     std::optional<size_t> read_size;
 
-    Poco::Logger * trace_log = &Poco::Logger::get("[slice_read]");
+    Poco::Logger * trace_log = &Poco::Logger::get("[SliceReadBuffer]");
 };
 };

@@ -1,8 +1,6 @@
 #include "SliceManagement.h"
 #include <IO/copyData.h>
 
-#define USE_LRU
-
 namespace DB
 {
 
@@ -141,23 +139,31 @@ std::unique_ptr<WriteBufferFromFileBase> SliceManagement::createRemoteFileToUplo
 std::unique_ptr<ReadBufferFromFileBase>
 SliceManagement::tryToReadSliceFromRemote(const String & key, const ReadSettings & settings, std::optional<size_t> size)
 {
+#ifdef SLICE_DEBUG
     LOG_TRACE(log, "try to read {} from remote.", key);
+#endif
     if (remote_disk != nullptr)
     {
         if (remote_disk->exists(key))
         {
+#ifdef SLICE_DEBUG
             LOG_TRACE(log, "{} exist.", key);
+#endif
             return std::move(remote_disk->readFile(key, settings, size));
         }
         else
         {
+#ifdef SLICE_DEBUG
             LOG_TRACE(log, "{} don't exist.", key);
+#endif
             return nullptr;
         }
     }
     else
     {
+#ifdef SLICE_DEBUG
         LOG_TRACE(log, "empty remote disk.");
+#endif
         return nullptr;
     }
 }
@@ -170,6 +176,7 @@ SliceManagement::SlicePtr SliceManagement::acquireDownloadSlice(String & query_i
     /// This slice has been created.
     if (it != slice_downloads.end())
     {
+        stats.addSliceHit(path);
         stats.addQueryHit(query_id);
 
         String list_name = it->second->second->query_id;
@@ -183,6 +190,7 @@ SliceManagement::SlicePtr SliceManagement::acquireDownloadSlice(String & query_i
             }
             auto from_list = list_map[prefetch_list_name];
             auto to_list = list_map[query_id];
+#ifdef SLICE_DEBUG
             /// DEBUG
             LOG_TRACE(
                 log,
@@ -191,6 +199,7 @@ SliceManagement::SlicePtr SliceManagement::acquireDownloadSlice(String & query_i
                 query_id,
                 from_list->UsageMB(),
                 from_list->TotalMB());
+#endif
             /// TODO move
             from_list->Erase(it->second);
             to_list->PushBack(path, metadata);
@@ -215,6 +224,7 @@ SliceManagement::SlicePtr SliceManagement::acquireDownloadSlice(String & query_i
     }
     else
     {
+        stats.addSliceMiss(path);
         stats.addQueryMiss(query_id);
 
         /// create new metadata entry
@@ -255,6 +265,7 @@ void SliceManagement::handlePrefetch()
                 if (metadata->canDownload())
                 {
                     stats.addPrefetch(1);
+#ifdef SLICE_DEBUG
                     /// debug print
                     LOG_TRACE(
                         log,
@@ -263,6 +274,7 @@ void SliceManagement::handlePrefetch()
                         std::get<0>(front->vec_slice[i]),
                         std::get<1>(front->vec_slice[i]),
                         std::get<2>(front->vec_slice[i]));
+#endif
                     size_t offset = std::get<1>(front->vec_slice[i]);
                     size_t size = std::get<2>(front->vec_slice[i]);
 
@@ -285,6 +297,7 @@ void SliceManagement::handlePrefetch()
                 }
                 else
                 {
+#ifdef SLICE_DEBUG
                     LOG_TRACE(
                         log,
                         "we can not prefetch slice : [{}]/[{}]-[{}]-[{}], because it has been downloaded",
@@ -292,12 +305,14 @@ void SliceManagement::handlePrefetch()
                         std::get<0>(front->vec_slice[i]),
                         std::get<1>(front->vec_slice[i]),
                         std::get<2>(front->vec_slice[i]));
+#endif
                 }
                 /// else may be any other thread is downloading or downloaded.
                 metadata->Unlock();
             }
             else
             {
+#ifdef SLICE_DEBUG
                 LOG_TRACE(
                     log,
                     "we can not prefetch slice : [{}]/[{}]-[{}]-[{}], because it has been lock",
@@ -305,6 +320,7 @@ void SliceManagement::handlePrefetch()
                     std::get<0>(front->vec_slice[i]),
                     std::get<1>(front->vec_slice[i]),
                     std::get<2>(front->vec_slice[i]));
+#endif
             }
         }
         prefetch_queue.pop();
@@ -329,9 +345,9 @@ void SliceManagement::tryToAddBackgroundPrefetchTask(std::shared_ptr<SlicePrefet
 
 void SliceManagement::tryToFreeListSpace(std::shared_ptr<SliceManagement::SliceListMetadata> list)
 {
-    size_t usage_space_mb = list->UsageMB();
-    size_t total_space_mb = list->TotalMB();
-    LOG_TRACE(log, "[start] Using LRU to cleanup {} list, usage : {}/{}MB.", list->ListName(), usage_space_mb, total_space_mb);
+#ifdef SLICE_DEBUG
+    LOG_TRACE(log, "[start] Using LRU to cleanup {} list, usage : {}/{}MB.", list->ListName(), list->UsageMB(), list->TotalMB());
+#endif
     {
         size_t need_to_free = list->UsageBytes() - list->TotalBytes();
         size_t has_free = 0;
@@ -363,9 +379,9 @@ void SliceManagement::tryToFreeListSpace(std::shared_ptr<SliceManagement::SliceL
             }
         }
     }
-    usage_space_mb = list->UsageMB();
-    total_space_mb = list->TotalMB();
-    LOG_TRACE(log, "[end] Using LRU to cleanup {} list, usage : {}/{}MB.", list->ListName(), usage_space_mb, total_space_mb);
+#ifdef SLICE_DEBUG
+    LOG_TRACE(log, "[end] Using LRU to cleanup {} list, usage : {}/{}MB.", list->ListName(), list->UsageMB(), list->TotalMB());
+#endif
 }
 
 
@@ -375,6 +391,7 @@ void SliceManagement::cleanupMainList()
     auto main_list = list_map[main_list_name];
     auto prefetch_list = list_map[prefetch_list_name];
 
+#ifdef SLICE_DEBUG
     LOG_TRACE(
         log,
         "[start] Using LRU to cleanup prefetch list : {}, usage : {}/{}MB.",
@@ -388,7 +405,7 @@ void SliceManagement::cleanupMainList()
         slice_downloads.size(),
         main_list->UsageMB(),
         main_list->TotalMB());
-
+#endif
     {
         size_t max_free_space_size = (128UL * 1024 * 1024);
         size_t sz = main_list->SliceCount();
@@ -421,7 +438,7 @@ void SliceManagement::cleanupMainList()
         }
         is_cleanup = false;
     }
-
+#ifdef SLICE_DEBUG
     LOG_TRACE(
         log,
         "[end] Using LRU to cleanup prefetch list : {}, usage : {}/{}MB.",
@@ -435,6 +452,7 @@ void SliceManagement::cleanupMainList()
         slice_downloads.size(),
         main_list->UsageMB(),
         main_list->TotalMB());
+#endif
     mutex.unlock();
 }
 
@@ -456,7 +474,9 @@ void SliceManagement::setQueryContext(String & query_id)
     if (it != list_map.end())
     {
         it->second->SubRef();
+#ifdef SLICE_DEBUG
         LOG_TRACE(log, "[set query context][update][query_id:{}][num_open_file:{}]", query_id, it->second->NumRef());
+#endif
     }
     else
     {
@@ -464,7 +484,9 @@ void SliceManagement::setQueryContext(String & query_id)
         auto new_list = std::make_shared<SliceManagement::SliceListMetadata>(query_id, max_query_cache_size);
         list_map[query_id] = new_list;
         new_list->SubRef();
+#ifdef SLICE_DEBUG
         LOG_TRACE(log, "[set query context][open:{}][query_id:{}][num_open_file:{}]", query_id, list_map.size(), new_list->NumRef());
+#endif
     }
     mutex.unlock();
 }
@@ -473,6 +495,7 @@ void SliceManagement::setQueryContext(String & query_id)
 void SliceManagement::listMove(
     std::shared_ptr<SliceManagement::SliceListMetadata> from, std::shared_ptr<SliceManagement::SliceListMetadata> to)
 {
+#ifdef SLICE_DEBUG
     LOG_TRACE(
         log,
         "start move list from [query_id:{}][size:{}] to [query_id:{}][size:{}].",
@@ -480,6 +503,7 @@ void SliceManagement::listMove(
         from->SliceCount(),
         to->ListName(),
         to->SliceCount());
+#endif
     auto from_list = from->List();
     for (auto iter = from_list->begin(); iter != from_list->end(); iter++)
     {
@@ -490,6 +514,7 @@ void SliceManagement::listMove(
         auto end_iter = to->LastIterator();
         slice_downloads[iter->first] = end_iter; /// create index
     }
+#ifdef SLICE_DEBUG
     LOG_TRACE(
         log,
         "finish move list from [query_id:{}][size:{}] to [query_id:{}][size:{}].",
@@ -497,6 +522,7 @@ void SliceManagement::listMove(
         from->SliceCount(),
         to->ListName(),
         to->SliceCount());
+#endif
 }
 
 
@@ -508,12 +534,15 @@ void SliceManagement::freeQueryContext(String & query_id)
     {
         auto query_list = it->second;
         query_list->DecRef();
+#ifdef SLICE_DEBUG
         LOG_TRACE(log, "[free query context][delete][query_id:{}][num_open_file:{}]", query_id, query_list->NumRef());
+#endif
         if (!query_list->NumRef())
         {
             auto from_list = list_map[query_id];
             auto to_list = list_map[main_list_name];
             listMove(from_list, to_list);
+#ifdef SLICE_DEBUG
             /// debug to print query statistics.
             LOG_TRACE(
                 log,
@@ -521,6 +550,7 @@ void SliceManagement::freeQueryContext(String & query_id)
                 query_id,
                 stats.getQueryHitRatio(query_id),
                 stats.getPrefetchHitRatio());
+#endif
             list_map.erase(query_id);
             /// try to start a background GC task.
             if (to_list->isFull())

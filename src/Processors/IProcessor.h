@@ -1,11 +1,14 @@
 #pragma once
 
 #include <memory>
+#include <vector>
+#include <time.h>
 #include <Processors/Port.h>
-
+#include <base/logger_useful.h>
 
 class EventCounter;
 
+#define COLLECT_PROCESSOR_STATS
 
 namespace DB
 {
@@ -116,8 +119,7 @@ protected:
 public:
     IProcessor() = default;
 
-    IProcessor(InputPorts inputs_, OutputPorts outputs_)
-        : inputs(std::move(inputs_)), outputs(std::move(outputs_))
+    IProcessor(InputPorts inputs_, OutputPorts outputs_) : inputs(std::move(inputs_)), outputs(std::move(outputs_))
     {
         for (auto & port : inputs)
             port.processor = this;
@@ -239,7 +241,7 @@ public:
 
     /// Additional method which is called in case if ports were updated while work() method.
     /// May be used to stop execution in rare cases.
-    virtual void onUpdatePorts() {}
+    virtual void onUpdatePorts() { }
 
     virtual ~IProcessor() = default;
 
@@ -299,8 +301,16 @@ public:
     IQueryPlanStep * getQueryPlanStep() const { return query_plan_step; }
     size_t getQueryPlanStepGroup() const { return query_plan_step_group; }
 
+public:
+    /// debug
+    Poco::Logger * trace_log = &Poco::Logger::get("[IProcessor]");
+
+    void collect(double sec) { vec_run_times.push_back(sec); }
+
+    std::vector<double> vec_run_times;
+
 protected:
-    virtual void onCancel() {}
+    virtual void onCancel() { }
 
 private:
     std::atomic<bool> is_cancelled{false};

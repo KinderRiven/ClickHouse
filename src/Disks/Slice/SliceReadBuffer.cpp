@@ -26,6 +26,7 @@ SliceReadBuffer::SliceReadBuffer(
     {
         slice_file->read(reinterpret_cast<char *>(&tmp_slice), sizeof(tmp_slice));
         vec_slice.push_back(tmp_slice);
+#ifdef SLICE_DEBUG
         LOG_TRACE(
             trace_log,
             "[init][file:{}][slices_id:{}][num_block:{}][uncompressed_size:{}][compressed_size:{}][offset:{}]",
@@ -35,6 +36,7 @@ SliceReadBuffer::SliceReadBuffer(
             tmp_slice.uncompressed_size,
             tmp_slice.compressed_size,
             tmp_slice.offset_in_compressed_file);
+#endif
         i++;
     }
     swap(*remote_data_file); /// start with main data file
@@ -46,11 +48,15 @@ SliceReadBuffer::SliceReadBuffer(
 
 SliceReadBuffer::~SliceReadBuffer()
 {
+#ifdef SLICE_DEBUG
     LOG_TRACE(trace_log, "free slice read buffee.");
+#endif
     if (current_slice_metadata != nullptr)
     {
         current_slice_metadata->DecRef();
+#ifdef SLICE_DEBUG
         LOG_TRACE(trace_log, "[free][query_id:{}][slice_ref:{}]", read_settings.current_query_id, current_slice_metadata->NumRef());
+#endif
     }
     SliceManagement::instance().freeQueryContext(read_settings.current_query_id);
 }
@@ -104,6 +110,7 @@ void SliceReadBuffer::downloadSliceFile(const String & path, int slice_id)
     String tmp_path = path + ".tmp";
     auto writer = local_cache->writeFile(tmp_path, read_settings.local_fs_buffer_size, WriteMode::Rewrite);
 
+#ifdef SLICE_DEBUG
     off_t old_off = remote_data_file->getPosition();
     LOG_TRACE(
         trace_log,
@@ -113,7 +120,6 @@ void SliceReadBuffer::downloadSliceFile(const String & path, int slice_id)
         vec_slice[slice_id].compressed_size,
         path,
         old_off);
-
     LOG_TRACE(
         trace_log,
         "[download_slice_file][seek][slice_id:{}][slice_offset:{}][slice_size:{}][path:{}][current_offset:{}]",
@@ -122,8 +128,11 @@ void SliceReadBuffer::downloadSliceFile(const String & path, int slice_id)
         vec_slice[slice_id].compressed_size,
         path,
         old_off);
+#endif
+
     remote_data_file->seek(static_cast<off_t>(vec_slice[slice_id].offset_in_compressed_file), SEEK_SET);
 
+#ifdef SLICE_DEBUG
     LOG_TRACE(
         trace_log,
         "[download_slice_file][copy][slice_id:{}][slice_offset:{}][slice_size:{}][path:{}][current_offset:{}]",
@@ -132,8 +141,11 @@ void SliceReadBuffer::downloadSliceFile(const String & path, int slice_id)
         vec_slice[slice_id].compressed_size,
         path,
         old_off);
+#endif
+
     copyData(*remote_data_file, *writer, vec_slice[slice_id].compressed_size);
 
+#ifdef SLICE_DEBUG
     LOG_TRACE(
         trace_log,
         "[download_slice_file][move][slice_id:{}][slice_offset:{}][slice_size:{}][path:{}][current_offset:{}]",
@@ -142,8 +154,11 @@ void SliceReadBuffer::downloadSliceFile(const String & path, int slice_id)
         vec_slice[slice_id].compressed_size,
         path,
         old_off);
+#endif
+
     local_cache->moveFile(tmp_path, path); /// atomic
 
+#ifdef SLICE_DEBUG
     LOG_TRACE(
         trace_log,
         "[download_slice_file][return][slice_id:{}][slice_offset:{}][slice_size:{}][path:{}][current_offset:{}]",
@@ -152,12 +167,15 @@ void SliceReadBuffer::downloadSliceFile(const String & path, int slice_id)
         vec_slice[slice_id].compressed_size,
         path,
         old_off);
+#endif
 }
 
 
 void SliceReadBuffer::uploadSliceFile(const String & local_path, const String & remote_path)
 {
+#ifdef SLICE_DEBUG
     LOG_TRACE(trace_log, "[upload][local_file:{}][remote_path:{}]", local_path, remote_path);
+#endif
     auto remote_file = SliceManagement::instance().createRemoteFileToUpload(remote_path);
     if (remote_file != nullptr)
     {
@@ -166,7 +184,9 @@ void SliceReadBuffer::uploadSliceFile(const String & local_path, const String & 
     }
     else
     {
+#ifdef SLICE_DEBUG
         LOG_TRACE(trace_log, "[upload] Cannot get remote file to write.");
+#endif
     }
 }
 
@@ -176,7 +196,9 @@ bool SliceReadBuffer::isTemp(const String & path)
     String parent = parentPath(path);
     if (parent[0] == 't' && parent[1] == 'm' && parent[2] == 'p' && parent[3] == '_')
     {
+#ifdef SLICE_DEBUG
         LOG_TRACE(trace_log, "{} is a temp slice, thus we don't upload it.", path);
+#endif
         return true;
     }
     return false;
@@ -229,6 +251,7 @@ retry:
     {
         /// Another thread has loaded this slice.
         tryToPrefetch(file_path, current_slice);
+#ifdef SLICE_DEBUG
         LOG_TRACE(
             trace_log,
             "[switch][query_id:{}][downloaded][file:{}][slice:{}][offset:{}]",
@@ -236,10 +259,12 @@ retry:
             local_slice_path,
             slice_id,
             off);
+#endif
     }
     /// SliceDownloadStatus::SLICE_PREFETCH or SliceDownloadStatus::SLICE_DOWNLOADING
     else if (metadata->isLoading())
     {
+#ifdef SLICE_DEBUG
         /// TODO wait or prefetch.
         LOG_TRACE(
             trace_log,
@@ -248,6 +273,7 @@ retry:
             local_slice_path,
             slice_id,
             off);
+#endif
         while (!metadata->isLoading())
         {
             /// wait until this slice has been downloaded.
@@ -256,6 +282,7 @@ retry:
     /// SliceDownloadStatus::SLICE_DELETE
     else if (metadata->isDelete())
     {
+#ifdef SLICE_DEBUG
         LOG_TRACE(
             trace_log,
             "[switch][query_id:{}][delete][file:{}][slice:{}][offset:{}]",
@@ -263,12 +290,14 @@ retry:
             local_slice_path,
             slice_id,
             off);
+#endif
         metadata->Unlock();
         goto retry;
     }
     /// SliceDownloadStatus::SLICE_NONE
     else
     {
+#ifdef SLICE_DEBUG
         /// Download slice file from storage layer.
         LOG_TRACE(
             trace_log,
@@ -277,6 +306,7 @@ retry:
             local_slice_path,
             slice_id,
             off);
+#endif
         metadata->setDownloading();
         tryToPrefetch(file_path, current_slice);
         downloadSliceFile(local_slice_path, current_slice);
@@ -290,6 +320,7 @@ retry:
             current_slice_metadata->DecRef();
         }
         current_slice_metadata = metadata;
+#ifdef SLICE_DEBUG
         LOG_TRACE(
             trace_log,
             "[switch][query_id:{}][readFile][file:{}][slice:{}][slice_ref:{}]",
@@ -297,9 +328,10 @@ retry:
             local_slice_path,
             slice_id,
             current_slice_metadata->NumRef());
+#endif
     }
     metadata->Unlock();
-
+#ifdef SLICE_DEBUG
     LOG_TRACE(
         trace_log,
         "[switch][query_id:{}][readFile][file:{}][slice:{}][offset:{}]",
@@ -307,6 +339,7 @@ retry:
         local_slice_path,
         slice_id,
         off);
+#endif
     current_slice_file = local_cache->readFile(local_slice_path, read_settings, read_size);
     /// important !!!
     swap(*current_slice_file);
@@ -407,8 +440,9 @@ off_t SliceReadBuffer::getPosition()
 
 off_t SliceReadBuffer::seek(off_t off, int whence)
 {
+#ifdef SLICE_DEBUG
     LOG_TRACE(trace_log, "[seek][file:{}][offset:{}][whence:{}]", remote_data_file->getFileName(), off, whence);
-
+#endif
     if (whence == SEEK_SET)
     {
         offset_in_compressed_file = off;
@@ -430,7 +464,9 @@ off_t SliceReadBuffer::seek(off_t off, int whence)
     /// There is no matching slice. It may be switched to an offset exceeding the file size.
     if (new_slice_id == -1)
     {
+#ifdef SLICE_DEBUG
         LOG_TRACE(trace_log, "[seek][file:{}][bad_offset:{}]", remote_data_file->getFileName(), offset_in_compressed_file);
+#endif
         return -1;
     }
     else
@@ -468,12 +504,14 @@ bool SliceReadBuffer::nextImpl()
     /// There is no matching slice. It may be switched to an offset exceeding the file size.
     if (new_slice_id == -1)
     {
+#ifdef SLICE_DEBUG
         LOG_TRACE(
             trace_log,
             "[nextImpl][last][file:{}][slice_id:{}][offset:{}]",
             remote_data_file->getFileName(),
             current_slice,
             offset_in_compressed_file);
+#endif
         return false;
     }
     /// We need to switch to new slice.
