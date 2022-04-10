@@ -1,5 +1,5 @@
 #include <Processors/ISimpleTransform.h>
-
+#include <Common/Stopwatch.h>
 
 namespace DB
 {
@@ -10,6 +10,9 @@ ISimpleTransform::ISimpleTransform(Block input_header_, Block output_header_, bo
     , output(outputs.front())
     , skip_empty_chunks(skip_empty_chunks_)
 {
+#ifdef COLLECT_PROCESSOR_STATS
+    processor_name = "ISimpleTransform";
+#endif
 }
 
 ISimpleTransform::Status ISimpleTransform::prepare()
@@ -36,7 +39,6 @@ ISimpleTransform::Status ISimpleTransform::prepare()
 
         if (!no_more_data_needed)
             return Status::PortFull;
-
     }
 
     /// Stop if don't need more data.
@@ -75,6 +77,10 @@ ISimpleTransform::Status ISimpleTransform::prepare()
 
 void ISimpleTransform::work()
 {
+#ifdef COLLECT_PROCESSOR_STATS
+    Stopwatch watch;
+    watch.start();
+#endif
     if (input_data.exception)
     {
         /// Skip transform in case of exception.
@@ -104,7 +110,10 @@ void ISimpleTransform::work()
     if (has_output && !output_data.chunk && getOutputPort().getHeader())
         /// Support invariant that chunks must have the same number of columns as header.
         output_data.chunk = Chunk(getOutputPort().getHeader().cloneEmpty().getColumns(), 0);
+#ifdef COLLECT_PROCESSOR_STATS
+    watch.stop();
+    collect(watch.elapsedSeconds());
+#endif
 }
 
 }
-

@@ -6,6 +6,8 @@
 #include <IO/copyData.h>
 #include <Common/quoteString.h>
 
+#define ENABLE_SLICE_CACHE
+
 namespace DB
 {
 /**
@@ -178,6 +180,7 @@ DiskCacheWrapper::readFile(const String & path, const ReadSettings & settings, s
 {
     if (!cache_file_predicate(path))
     {
+#ifdef ENABLE_SLICE_CACHE
         String slice_path = path + ".slice";
         /// We assume that slice file must be cache in local disk.
         tryDownloadSliceMetaFile(slice_path, settings, size);
@@ -193,6 +196,7 @@ DiskCacheWrapper::readFile(const String & path, const ReadSettings & settings, s
                 size);
         }
         else
+#endif
         {
             LOG_TRACE(log, "[{}] is not slice file, thus we create normal buffer.", slice_path);
             /// Maybe, it is a data file (*.bin), we need to check whether it has slice file (*.slice).

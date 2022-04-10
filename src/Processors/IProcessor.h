@@ -243,7 +243,19 @@ public:
     /// May be used to stop execution in rare cases.
     virtual void onUpdatePorts() { }
 
-    virtual ~IProcessor() = default;
+    virtual ~IProcessor()
+    {
+        if (vec_run_times.size() > 0)
+        {
+            double total_time = 0;
+            for (auto & it : vec_run_times)
+            {
+                total_time += it;
+            }
+            /// LOG_TRACE(trace_log, "Processor [{}] run count : {}, time : {}", getName(), vec_run_times.size(), total_time);
+            LOG_TRACE(trace_log, "Processor [{}] run count : {}, time : {}", processor_name, vec_run_times.size(), total_time);
+        }
+    }
 
     auto & getInputs() { return inputs; }
     auto & getOutputs() { return outputs; }
@@ -308,6 +320,8 @@ public:
     void collect(double sec) { vec_run_times.push_back(sec); }
 
     std::vector<double> vec_run_times;
+
+    std::string processor_name;
 
 protected:
     virtual void onCancel() { }
