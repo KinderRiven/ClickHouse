@@ -6,7 +6,7 @@
 #include <IO/copyData.h>
 #include <Common/quoteString.h>
 
-#define ENABLE_SLICE_CACHE
+/// #define ENABLE_SLICE_CACHE
 
 namespace DB
 {
