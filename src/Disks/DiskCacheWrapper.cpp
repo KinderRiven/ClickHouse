@@ -6,7 +6,7 @@
 #include <IO/copyData.h>
 #include <Common/quoteString.h>
 
-#define ENABLE_SLICE_CACHE
+/// #define ENABLE_SLICE_CACHE
 
 namespace DB
 {
@@ -180,8 +180,8 @@ DiskCacheWrapper::readFile(const String & path, const ReadSettings & settings, s
 {
     if (!cache_file_predicate(path))
     {
-        String slice_path = path + ".slice";
 #ifdef ENABLE_SLICE_CACHE
+        String slice_path = path + ".slice";
         /// We assume that slice file must be cache in local disk.
         tryDownloadSliceMetaFile(slice_path, settings, size);
         if (cache_disk->exists(slice_path))
