@@ -1,6 +1,7 @@
 #include "SliceReadBuffer.h"
 #include <IO/copyData.h>
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
 #include "SliceManagement.h"
 
 namespace DB
@@ -20,6 +21,11 @@ SliceReadBuffer::SliceReadBuffer(
     , read_settings(settings_)
     , read_size(size_)
 {
+#ifdef SLICE_WATCH
+    /// just for debug
+    Stopwatch watch;
+    watch.start();
+#endif
     int i = 0;
     Slice tmp_slice;
     while (!slice_file->eof())
@@ -43,6 +49,10 @@ SliceReadBuffer::SliceReadBuffer(
     /// hold buffer is remote_data_file,
     /// external buffer is remote_data_file, its buffer is NULL.
     SliceManagement::instance().setQueryContext(read_settings.current_query_id);
+#ifdef SLICE_WATCH
+    watch.stop();
+    slice_init_ns += watch.elapsedNanoseconds();
+#endif
 }
 
 
@@ -55,7 +65,35 @@ SliceReadBuffer::~SliceReadBuffer()
     {
         current_slice_metadata->DecRef();
 #ifdef SLICE_DEBUG
-        LOG_TRACE(trace_log, "[free][query_id:{}][slice_ref:{}]", read_settings.current_query_id, current_slice_metadata->NumRef());
+        LOG_TRACE(
+            trace_log,
+            "[filename:{}][free][query_id:{}][slice_ref:{}]",
+            getFileName(),
+            read_settings.current_query_id,
+            current_slice_metadata->NumRef());
+#endif
+#ifdef SLICE_WATCH
+        LOG_TRACE(
+            trace_log,
+            "[filename:{}][management_cost:{}ns][slice_cost:{}ns][next_cost:{}][init_cost:{}]",
+            getFileName(),
+            slice_management_ns.load(),
+            slice_wait_ns.load(),
+            slice_next_impl_ns.load(),
+            slice_init_ns.load());
+        /// collect
+        SliceManagement::instance().addSliceManagementCost(slice_management_ns.load());
+        SliceManagement::instance().addSliceBufferCost(slice_wait_ns.load());
+        SliceManagement::instance().addSliceNextImplCost(slice_next_impl_ns.load());
+        SliceManagement::instance().addSliceInitCost(slice_init_ns.load());
+        LOG_TRACE(
+            trace_log,
+            "[filename:{}][donwloaded:{}][loading:{}][delete:{}][downloading:{}]",
+            getFileName(),
+            downloaded_count.load(),
+            loading_count.load(),
+            delete_count.load(),
+            downloading_count.load());
 #endif
     }
     SliceManagement::instance().freeQueryContext(read_settings.current_query_id);
@@ -236,7 +274,17 @@ off_t SliceReadBuffer::switchToSlice(int slice_id, off_t off)
     String file_path = remote_data_file->getFileName();
     String local_slice_path = getLocalSlicePath(file_path, current_slice);
 retry:
+#ifdef SLICE_WATCH
+    /// just for debug
+    Stopwatch watch;
+    watch.start();
+#endif
     auto metadata = SliceManagement::instance().acquireDownloadSlice(read_settings.current_query_id, local_slice_path);
+#ifdef SLICE_WATCH
+    watch.stop();
+    slice_management_ns += watch.elapsedNanoseconds();
+    watch.start();
+#endif
     metadata->Lock();
     /// enum SliceDownloadStatus
     /// {
@@ -249,8 +297,11 @@ retry:
     /// SliceDownloadStatus::SLICE_DOWNLOADED
     if (metadata->isDownloaded())
     {
+#ifdef SLICE_WATCH
+        downloaded_count++;
+#endif
         /// Another thread has loaded this slice.
-        tryToPrefetch(file_path, current_slice);
+        /// tryToPrefetch(file_path, current_slice);
 #ifdef SLICE_DEBUG
         LOG_TRACE(
             trace_log,
@@ -264,6 +315,9 @@ retry:
     /// SliceDownloadStatus::SLICE_PREFETCH or SliceDownloadStatus::SLICE_DOWNLOADING
     else if (metadata->isLoading())
     {
+#ifdef SLICE_WATCH
+        loading_count++;
+#endif
 #ifdef SLICE_DEBUG
         /// TODO wait or prefetch.
         LOG_TRACE(
@@ -282,6 +336,9 @@ retry:
     /// SliceDownloadStatus::SLICE_DELETE
     else if (metadata->isDelete())
     {
+#ifdef SLICE_WATCH
+        delete_count++;
+#endif
 #ifdef SLICE_DEBUG
         LOG_TRACE(
             trace_log,
@@ -297,6 +354,9 @@ retry:
     /// SliceDownloadStatus::SLICE_NONE
     else
     {
+#ifdef SLICE_WATCH
+        downloading_count++;
+#endif
 #ifdef SLICE_DEBUG
         /// Download slice file from storage layer.
         LOG_TRACE(
@@ -308,7 +368,7 @@ retry:
             off);
 #endif
         metadata->setDownloading();
-        tryToPrefetch(file_path, current_slice);
+        /// tryToPrefetch(file_path, current_slice);
         downloadSliceFile(local_slice_path, current_slice);
         metadata->setDownloaded();
     }
@@ -331,6 +391,10 @@ retry:
 #endif
     }
     metadata->Unlock();
+#ifdef SLICE_WATCH
+    watch.stop();
+    slice_wait_ns += watch.elapsedNanoseconds();
+#endif
 #ifdef SLICE_DEBUG
     LOG_TRACE(
         trace_log,
@@ -490,11 +554,15 @@ off_t SliceReadBuffer::seek(off_t off, int whence)
 
 bool SliceReadBuffer::nextImpl()
 {
+#ifdef SLICE_WATCH
+    /// just for debug
+    Stopwatch watch;
+    watch.start();
+#endif
     if (current_slice == -1) /// fist run eof()
     {
         swap(*remote_data_file);
     }
-
     offset_in_compressed_file += offset();
     ///
     /// When running here, we may perform the operation of moving the pointer such as
@@ -512,6 +580,10 @@ bool SliceReadBuffer::nextImpl()
             current_slice,
             offset_in_compressed_file);
 #endif
+#ifdef SLICE_WATCH
+        watch.stop();
+        slice_next_impl_ns += watch.elapsedNanoseconds();
+#endif
         return false;
     }
     /// We need to switch to new slice.
@@ -522,6 +594,10 @@ bool SliceReadBuffer::nextImpl()
     swap(*current_slice_file);
     current_slice_file->next();
     swap(*current_slice_file);
+#ifdef SLICE_WATCH
+    watch.stop();
+    slice_next_impl_ns += watch.elapsedNanoseconds();
+#endif
     return true;
 }
 

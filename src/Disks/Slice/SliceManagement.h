@@ -382,12 +382,29 @@ public:
 
     void freeQueryContext(String & query_id);
 
+public:
+    void addSliceManagementCost(uint64_t cost) { slice_management_cost += cost; };
+
+    void addSliceBufferCost(uint64_t cost) { slice_buffer_cost += cost; };
+
+    void addSliceNextImplCost(uint64_t cost) { slice_next_impl_cost += cost; }
+
+    void addSliceInitCost(uint64_t cost) { slice_init_cost += cost; }
+
 private:
     /// SliceManagement() = default;
     SliceManagement() { total_space_size = 512UL * 1024 * 1024; };
 
     ~SliceManagement()
     {
+        LOG_TRACE(
+            log,
+            "slice_management_cost:{}ns, slice_buffer_cost:{}ns, next_impl_cost:{}, init_cost:{}",
+            slice_management_cost.load(),
+            slice_buffer_cost.load(),
+            slice_next_impl_cost.load(),
+            slice_init_cost.load());
+        ///
         time_t now = time(nullptr);
         auto cstr_time = ctime(&now);
         String log_name = String(cstr_time, strlen(cstr_time) - 1) + ".slice_trace";
@@ -449,5 +466,13 @@ private:
 
     /// record cache stat
     CacheStats stats;
+
+    std::atomic<uint64_t> slice_management_cost = 0;
+
+    std::atomic<uint64_t> slice_next_impl_cost = 0;
+
+    std::atomic<uint64_t> slice_buffer_cost = 0;
+
+    std::atomic<uint64_t> slice_init_cost = 0;
 };
 };

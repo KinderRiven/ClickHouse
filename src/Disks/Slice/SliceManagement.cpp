@@ -13,11 +13,11 @@ static String main_list_name = "main";
 static String prefetch_list_name = "prefetch";
 
 /// max prefetch list size
-static size_t max_prefetch_size = (512UL * 1024 * 1024);
+static size_t max_prefetch_size = (2UL * 1024 * 1024);
 /// static size_t max_prefetch_size = (64UL * 1024 * 1024);
 
 /// max list size for each query
-static size_t max_query_cache_size = (2UL * 1024 * 1024 * 1024);
+static size_t max_query_cache_size = (10UL * 1024 * 1024 * 1024);
 /// static size_t max_query_cache_size = (128UL * 1024 * 1024);
 
 /// max main list size
@@ -539,6 +539,14 @@ void SliceManagement::freeQueryContext(String & query_id)
 #endif
         if (!query_list->NumRef())
         {
+            LOG_TRACE(
+                log,
+                "slice_management_cost:{}ns, slice_buffer_cost:{}ns, next_impl_cost:{}, init_cost:{}",
+                slice_management_cost.load(),
+                slice_buffer_cost.load(),
+                slice_next_impl_cost.load(),
+                slice_init_cost.load());
+
             auto from_list = list_map[query_id];
             auto to_list = list_map[main_list_name];
             listMove(from_list, to_list);

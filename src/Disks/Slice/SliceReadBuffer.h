@@ -1,11 +1,15 @@
 #pragma once
 
+#include <atomic>
 #include <Disks/DiskLocal.h>
 #include <Disks/IDisk.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <IO/ReadSettings.h>
 #include <base/logger_useful.h>
 #include "SliceManagement.h"
+
+/// #define SLICE_DEBUG
+#define SLICE_WATCH
 
 namespace DB
 {
@@ -80,6 +84,10 @@ public:
 
     void uploadSliceFile(const String & local_path, const String & remote_path);
 
+    uint64_t getManagementCost() { return slice_management_ns.load(); }
+
+    uint64_t getWaitCost() { return slice_wait_ns.load(); }
+
 private:
     int current_slice = -1;
 
@@ -104,5 +112,22 @@ private:
     std::optional<size_t> read_size;
 
     Poco::Logger * trace_log = &Poco::Logger::get("[SliceReadBuffer]");
+
+private: /// debug performance
+    std::atomic<uint64_t> slice_init_ns = 0;
+
+    std::atomic<uint64_t> slice_next_impl_ns = 0;
+
+    std::atomic<uint64_t> slice_management_ns = 0;
+
+    std::atomic<uint64_t> slice_wait_ns = 0;
+
+    std::atomic<uint64_t> downloaded_count = 0;
+
+    std::atomic<uint64_t> downloading_count = 0;
+
+    std::atomic<uint64_t> loading_count = 0;
+
+    std::atomic<uint64_t> delete_count = 0;
 };
 };
