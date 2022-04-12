@@ -18,6 +18,8 @@ namespace DB
 {
 
 /// #define SLICE_DEBUG
+/// #define SLICE_WATCH
+/// #define USE_SLICE_PREFETCH
 
 class SliceReadBuffer;
 
@@ -249,7 +251,6 @@ public:
         void Miss() { cache_miss++; }
     };
 
-
     /// cache stat
     struct CacheStats
     {
@@ -397,14 +398,6 @@ private:
 
     ~SliceManagement()
     {
-        LOG_TRACE(
-            log,
-            "slice_management_cost:{}ns, slice_buffer_cost:{}ns, next_impl_cost:{}, init_cost:{}",
-            slice_management_cost.load(),
-            slice_buffer_cost.load(),
-            slice_next_impl_cost.load(),
-            slice_init_cost.load());
-        ///
         time_t now = time(nullptr);
         auto cstr_time = ctime(&now);
         String log_name = String(cstr_time, strlen(cstr_time) - 1) + ".slice_trace";

@@ -7,22 +7,20 @@ namespace DB
 /// main list name
 /// list_map["main"] = main_list;
 static String main_list_name = "main";
-
 /// prefetch list name
 /// list_map["prefetch"] = prefetch_list;
 static String prefetch_list_name = "prefetch";
 
-/// max prefetch list size
-static size_t max_prefetch_size = (2UL * 1024 * 1024);
-/// static size_t max_prefetch_size = (64UL * 1024 * 1024);
+/// [1] 128MB - max prefetch list size
+/// [2] 128MB - max list size for each query
+/// [3] 10GB - max main list size
+/// static size_t max_prefetch_size = (256UL * 1024 * 1024);
+/// static size_t max_query_cache_size = (256UL * 1024 * 1024);
+/// static size_t max_cache_size = (2UL * 1024 * 1024 * 1024);
 
-/// max list size for each query
-static size_t max_query_cache_size = (10UL * 1024 * 1024 * 1024);
-/// static size_t max_query_cache_size = (128UL * 1024 * 1024);
-
-/// max main list size
+static size_t max_prefetch_size = (4UL * 1024 * 1024 * 1024);
+static size_t max_query_cache_size = (4UL * 1024 * 1024 * 1024);
 static size_t max_cache_size = (10UL * 1024 * 1024 * 1024);
-/// static size_t max_cache_size = (512UL * 1024 * 1024);
 
 
 String GetLocalSlicePath(const String & path, int slice_id)
@@ -220,6 +218,7 @@ SliceManagement::SlicePtr SliceManagement::acquireDownloadSlice(String & query_i
         /// update access count for LFU
         metadata->Access();
         mutex.unlock();
+        metadata->SubRef();
         return metadata;
     }
     else
@@ -237,6 +236,7 @@ SliceManagement::SlicePtr SliceManagement::acquireDownloadSlice(String & query_i
         slice_downloads[path] = end_iter; /// create index
         /// update access count for LFU
         metadata->Access();
+        metadata->SubRef();
         /// maybe cleanup task.
         if (query_list->isFull())
         {
@@ -343,6 +343,8 @@ void SliceManagement::tryToAddBackgroundPrefetchTask(std::shared_ptr<SlicePrefet
 }
 
 
+/// acquireDownloadSlice -> tryToFreeListSpace
+/// Only one thread enter this function.
 void SliceManagement::tryToFreeListSpace(std::shared_ptr<SliceManagement::SliceListMetadata> list)
 {
 #ifdef SLICE_DEBUG
@@ -357,22 +359,25 @@ void SliceManagement::tryToFreeListSpace(std::shared_ptr<SliceManagement::SliceL
             auto begin_iter = list->FirstIterator();
             auto path = begin_iter->first;
             auto metadata = begin_iter->second;
-            metadata->Lock();
-            if (!metadata->NumRef())
+            bool try_lock = metadata->tryLock();
+            if (try_lock)
             {
-                metadata->setDelete();
-                slice_downloads.erase(path);
-                local_disk->removeFile(path);
-                has_free += metadata->size;
-                list->PopFront();
+                if (!metadata->NumRef())
+                {
+                    metadata->setDelete();
+                    slice_downloads.erase(path);
+                    local_disk->removeFile(path);
+                    has_free += metadata->size;
+                    list->PopFront();
+                }
+                else
+                {
+                    list->PushBack(path, metadata);
+                    slice_downloads[path] = list->LastIterator();
+                    list->PopFront();
+                }
+                metadata->Unlock();
             }
-            else
-            {
-                list->PushBack(path, metadata);
-                slice_downloads[path] = list->LastIterator();
-                list->PopFront();
-            }
-            metadata->Unlock();
             if (has_free >= need_to_free)
             {
                 break;
@@ -385,6 +390,7 @@ void SliceManagement::tryToFreeListSpace(std::shared_ptr<SliceManagement::SliceL
 }
 
 
+/// Only one thread enter this function.
 void SliceManagement::cleanupMainList()
 {
     mutex.lock();
@@ -415,22 +421,25 @@ void SliceManagement::cleanupMainList()
             auto begin_iter = main_list->FirstIterator();
             auto path = begin_iter->first;
             auto metadata = begin_iter->second;
-            metadata->Lock();
-            if (!metadata->NumRef())
+            bool try_lock = metadata->tryLock();
+            if (try_lock)
             {
-                metadata->setDelete();
-                slice_downloads.erase(path);
-                local_disk->removeFile(path);
-                free_space_size += metadata->size;
-                main_list->PopFront();
+                if (!metadata->NumRef())
+                {
+                    metadata->setDelete();
+                    slice_downloads.erase(path);
+                    local_disk->removeFile(path);
+                    free_space_size += metadata->size;
+                    main_list->PopFront();
+                }
+                else
+                {
+                    main_list->PushBack(path, metadata);
+                    slice_downloads[path] = main_list->LastIterator();
+                    main_list->PopFront();
+                }
+                metadata->Unlock();
             }
-            else
-            {
-                main_list->PushBack(path, metadata);
-                slice_downloads[path] = main_list->LastIterator();
-                main_list->PopFront();
-            }
-            metadata->Unlock();
             if (free_space_size >= max_free_space_size)
             {
                 break;
@@ -467,6 +476,7 @@ void SliceManagement::tryToAddBackgroundCleanupTask()
 }
 
 
+/// Only one thread enter this function.
 void SliceManagement::setQueryContext(String & query_id)
 {
     mutex.lock();
@@ -491,7 +501,8 @@ void SliceManagement::setQueryContext(String & query_id)
     mutex.unlock();
 }
 
-
+/// freeQueryContext ->listmove
+/// Only one thread enter this function.
 void SliceManagement::listMove(
     std::shared_ptr<SliceManagement::SliceListMetadata> from, std::shared_ptr<SliceManagement::SliceListMetadata> to)
 {
@@ -539,6 +550,7 @@ void SliceManagement::freeQueryContext(String & query_id)
 #endif
         if (!query_list->NumRef())
         {
+#ifdef SLICE_WATCH
             LOG_TRACE(
                 log,
                 "slice_management_cost:{}ns, slice_buffer_cost:{}ns, next_impl_cost:{}, init_cost:{}",
@@ -546,7 +558,7 @@ void SliceManagement::freeQueryContext(String & query_id)
                 slice_buffer_cost.load(),
                 slice_next_impl_cost.load(),
                 slice_init_cost.load());
-
+#endif
             auto from_list = list_map[query_id];
             auto to_list = list_map[main_list_name];
             listMove(from_list, to_list);

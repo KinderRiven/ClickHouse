@@ -184,9 +184,10 @@ DiskCacheWrapper::readFile(const String & path, const ReadSettings & settings, s
 #ifdef ENABLE_SLICE_CACHE
         /// We assume that slice file must be cache in local disk.
         tryDownloadSliceMetaFile(slice_path, settings, size);
-        if (cache_disk->exists(slice_path))
+        /// Has slice file and is client query.
+        if (cache_disk->exists(slice_path) && (settings.current_query_id.size() > 0))
         {
-            LOG_TRACE(log, "[{}] is slice file, so we create slicereadbuffer.", slice_path);
+            LOG_TRACE(log, "[{}-{}] is slice file, so we create slicereadbuffer.", slice_path, settings.current_query_id);
             return std::make_unique<SliceReadBuffer>(
                 cache_disk->readFile(slice_path, settings, size),
                 slice_cache_disk,

@@ -8,8 +8,6 @@
 #include <base/logger_useful.h>
 #include "SliceManagement.h"
 
-/// #define SLICE_DEBUG
-#define SLICE_WATCH
 
 namespace DB
 {

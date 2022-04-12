@@ -300,8 +300,10 @@ retry:
 #ifdef SLICE_WATCH
         downloaded_count++;
 #endif
-        /// Another thread has loaded this slice.
-        /// tryToPrefetch(file_path, current_slice);
+/// Another thread has loaded this slice.
+#ifdef USE_SLICE_PREFETCH
+        tryToPrefetch(file_path, current_slice);
+#endif
 #ifdef SLICE_DEBUG
         LOG_TRACE(
             trace_log,
@@ -368,13 +370,15 @@ retry:
             off);
 #endif
         metadata->setDownloading();
-        /// tryToPrefetch(file_path, current_slice);
+#ifdef USE_SLICE_PREFETCH
+        tryToPrefetch(file_path, current_slice);
+#endif
         downloadSliceFile(local_slice_path, current_slice);
         metadata->setDownloaded();
     }
 
     {
-        metadata->SubRef();
+        /// release before slice.
         if (current_slice_metadata != nullptr)
         {
             current_slice_metadata->DecRef();

@@ -1,20 +1,21 @@
 #include "ReadBufferFromRemoteFSGather.h"
 
 #include <Disks/IDiskRemote.h>
-#include <IO/SeekableReadBuffer.h>
 #include <Disks/IO/ReadBufferFromWebServer.h>
+#include <IO/SeekableReadBuffer.h>
+#include <Common/Stopwatch.h>
 
 #if USE_AWS_S3
-#include <IO/ReadBufferFromS3.h>
+#    include <IO/ReadBufferFromS3.h>
 #endif
 
 #if USE_HDFS
-#include <Storages/HDFS/ReadBufferFromHDFS.h>
+#    include <Storages/HDFS/ReadBufferFromHDFS.h>
 #endif
 
-#include <base/logger_useful.h>
 #include <filesystem>
 #include <iostream>
+#include <base/logger_useful.h>
 
 namespace fs = std::filesystem;
 
@@ -24,8 +25,14 @@ namespace DB
 #if USE_AWS_S3
 SeekableReadBufferPtr ReadBufferFromS3Gather::createImplementationBuffer(const String & path, size_t read_until_position_) const
 {
-    return std::make_unique<ReadBufferFromS3>(client_ptr, bucket,
-        fs::path(metadata.remote_fs_root_path) / path, max_single_read_retries, settings, threadpool_read, read_until_position_);
+    return std::make_unique<ReadBufferFromS3>(
+        client_ptr,
+        bucket,
+        fs::path(metadata.remote_fs_root_path) / path,
+        max_single_read_retries,
+        settings,
+        threadpool_read,
+        read_until_position_);
 }
 #endif
 
@@ -45,10 +52,17 @@ SeekableReadBufferPtr ReadBufferFromHDFSGather::createImplementationBuffer(const
 
 
 ReadBufferFromRemoteFSGather::ReadBufferFromRemoteFSGather(const RemoteMetadata & metadata_, const String & path_)
-    : ReadBuffer(nullptr, 0)
-    , metadata(metadata_)
-    , canonical_path(path_)
+    : ReadBuffer(nullptr, 0), metadata(metadata_), canonical_path(path_)
 {
+}
+
+
+ReadBufferFromRemoteFSGather::~ReadBufferFromRemoteFSGather()
+{
+#ifdef S3_WATCH
+    SliceManagement::instance().addSliceNextImplCost(next_impl_ns.load());
+    LOG_TRACE(trace_log, "[filename:{}][next_impl_cost:{}]", getFileName(), next_impl_ns.load());
+#endif
 }
 
 
@@ -103,6 +117,11 @@ void ReadBufferFromRemoteFSGather::initialize()
 
 bool ReadBufferFromRemoteFSGather::nextImpl()
 {
+#ifdef S3_WATCH
+    /// just for debug
+    Stopwatch watch;
+    watch.start();
+#endif
     /// Find first available buffer that fits to given offset.
     if (!current_buf)
         initialize();
@@ -111,21 +130,44 @@ bool ReadBufferFromRemoteFSGather::nextImpl()
     if (current_buf)
     {
         if (readImpl())
+        {
+#ifdef S3_WATCH
+            watch.stop();
+            next_impl_ns += watch.elapsedNanoseconds();
+#endif
             return true;
+        }
     }
     else
+    {
+#ifdef S3_WATCH
+        watch.stop();
+        next_impl_ns += watch.elapsedNanoseconds();
+#endif
         return false;
+    }
 
     /// If there is no available buffers - nothing to read.
     if (current_buf_idx + 1 >= metadata.remote_fs_objects.size())
+    {
+#ifdef S3_WATCH
+        watch.stop();
+        next_impl_ns += watch.elapsedNanoseconds();
+#endif
         return false;
+    }
 
     ++current_buf_idx;
 
     const auto & current_path = metadata.remote_fs_objects[current_buf_idx].first;
     current_buf = createImplementationBuffer(current_path, read_until_position);
 
-    return readImpl();
+    auto res = readImpl();
+#ifdef S3_WATCH
+    watch.stop();
+    next_impl_ns += watch.elapsedNanoseconds();
+#endif
+    return res;
 }
 
 

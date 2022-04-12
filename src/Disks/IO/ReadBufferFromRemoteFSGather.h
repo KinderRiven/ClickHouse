@@ -4,9 +4,14 @@
 #include <Common/config.h>
 #endif
 
+#include <atomic>
 #include <Disks/IDiskRemote.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadSettings.h>
+#include <base/logger_useful.h>
+#include <Disks/Slice/SliceManagement.h>
+
+/// #define S3_WATCH
 
 namespace Aws
 {
@@ -29,6 +34,8 @@ friend class ReadIndirectBufferFromRemoteFS;
 
 public:
     explicit ReadBufferFromRemoteFSGather(const RemoteMetadata & metadata_, const String & path_);
+
+    ~ReadBufferFromRemoteFSGather();
 
     String getFileName() const;
 
@@ -63,6 +70,10 @@ private:
     size_t read_until_position = 0;
 
     String canonical_path;
+
+    Poco::Logger * trace_log = &Poco::Logger::get("[ReadBufferFromRemoteFSGather]");
+
+    std::atomic<uint64_t> next_impl_ns = 0;
 };
 
 
