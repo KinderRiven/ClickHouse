@@ -20,7 +20,11 @@ static String prefetch_list_name = "prefetch";
 
 static size_t max_prefetch_size = (4UL * 1024 * 1024 * 1024);
 static size_t max_query_cache_size = (4UL * 1024 * 1024 * 1024);
-static size_t max_cache_size = (10UL * 1024 * 1024 * 1024);
+static size_t max_cache_size = (20UL * 1024 * 1024 * 1024);
+
+/// static size_t max_prefetch_size = (4UL * 1024 * 1024 * 1024);
+/// static size_t max_query_cache_size = (4UL * 1024 * 1024 * 1024);
+/// static size_t max_cache_size = (10UL * 1024 * 1024 * 1024);
 
 
 String GetLocalSlicePath(const String & path, int slice_id)
@@ -322,6 +326,7 @@ void SliceManagement::handlePrefetch()
                     std::get<2>(front->vec_slice[i]));
 #endif
             }
+            metadata->DecRef();
         }
         prefetch_queue.pop();
     }
@@ -351,7 +356,7 @@ void SliceManagement::tryToFreeListSpace(std::shared_ptr<SliceManagement::SliceL
     LOG_TRACE(log, "[start] Using LRU to cleanup {} list, usage : {}/{}MB.", list->ListName(), list->UsageMB(), list->TotalMB());
 #endif
     {
-        size_t need_to_free = list->UsageBytes() - list->TotalBytes();
+        size_t need_to_free = list->NeedToFreeBytes();
         size_t has_free = 0;
         size_t sz = list->SliceCount();
         for (size_t i = 0; i < sz; i++)
@@ -400,12 +405,6 @@ void SliceManagement::cleanupMainList()
 #ifdef SLICE_DEBUG
     LOG_TRACE(
         log,
-        "[start] Using LRU to cleanup prefetch list : {}, usage : {}/{}MB.",
-        prefetch_list->SliceCount(),
-        prefetch_list->UsageMB(),
-        prefetch_list->TotalMB());
-    LOG_TRACE(
-        log,
         "[start] Using LRU to cleanup main list, file : {}/{}, usage : {}/{}MB.",
         main_list->SliceCount(),
         slice_downloads.size(),
@@ -413,7 +412,7 @@ void SliceManagement::cleanupMainList()
         main_list->TotalMB());
 #endif
     {
-        size_t max_free_space_size = (128UL * 1024 * 1024);
+        size_t max_free_space_size = main_list->NeedToFreeBytes();
         size_t sz = main_list->SliceCount();
         size_t free_space_size = 0;
         for (size_t i = 0; i < sz; i++)
@@ -434,11 +433,20 @@ void SliceManagement::cleanupMainList()
                 }
                 else
                 {
+#ifdef SLICE_DEBUG
+                    LOG_TRACE(log, "cleanup main_list failed, can not free metadata {}, because its ref is {}.", path, metadata->NumRef());
+#endif
                     main_list->PushBack(path, metadata);
                     slice_downloads[path] = main_list->LastIterator();
                     main_list->PopFront();
                 }
                 metadata->Unlock();
+            }
+            else
+            {
+#ifdef SLICE_DEBUG
+                LOG_TRACE(log, "cleanup main_list failed, can not free metadata {}, because it has been locked.", path, metadata->NumRef());
+#endif
             }
             if (free_space_size >= max_free_space_size)
             {
@@ -448,12 +456,6 @@ void SliceManagement::cleanupMainList()
         is_cleanup = false;
     }
 #ifdef SLICE_DEBUG
-    LOG_TRACE(
-        log,
-        "[end] Using LRU to cleanup prefetch list : {}, usage : {}/{}MB.",
-        prefetch_list->SliceCount(),
-        prefetch_list->UsageMB(),
-        prefetch_list->TotalMB());
     LOG_TRACE(
         log,
         "[end] Using LRU to cleanup main list, file : {}/{}, usage : {}/{}MB.",
@@ -501,6 +503,7 @@ void SliceManagement::setQueryContext(String & query_id)
     mutex.unlock();
 }
 
+/// This is an ugly, bad function T_T.
 /// freeQueryContext ->listmove
 /// Only one thread enter this function.
 void SliceManagement::listMove(

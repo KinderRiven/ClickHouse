@@ -19,7 +19,7 @@ namespace DB
 
 /// #define SLICE_DEBUG
 /// #define SLICE_WATCH
-/// #define USE_SLICE_PREFETCH
+#define USE_SLICE_PREFETCH
 
 class SliceReadBuffer;
 
@@ -183,6 +183,19 @@ public:
         size_t SliceCount() const { return list->size(); }
 
         size_t UsageBytes() const { return usage_space_bytes; }
+
+        size_t NeedToFreeBytes() const
+        {
+            if (usage_space_bytes < total_space_bytes)
+            {
+                return 0;
+            }
+            else
+            {
+                double need_to_free = 1.0 * usage_space_bytes - 0.75 * total_space_bytes;
+                return static_cast<size_t>(need_to_free);
+            }
+        }
 
         size_t UsageMB() const { return usage_space_bytes / (1024 * 1024); }
 
