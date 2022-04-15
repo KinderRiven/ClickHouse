@@ -18,7 +18,7 @@ class IDiskKV : public IDisk
 {
 public:
     /// The disk under the KV model does not have a path.
-    const String & getPath() const final override { return ""; }
+    const String & getPath() const final override { return kv_path; }
 
     UInt64 getTotalSpace() const override { return std::numeric_limits<UInt64>::max(); }
 
@@ -110,5 +110,8 @@ public:
 
     /// Applies new settings for disk in runtime.
     void applyNewSettings(const Poco::Util::AbstractConfiguration &, ContextPtr, const String &, const DisksMap &) override { }
+
+private:
+    String kv_path = "";
 };
 };

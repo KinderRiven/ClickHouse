@@ -35,8 +35,6 @@ friend class ReadIndirectBufferFromRemoteFS;
 public:
     explicit ReadBufferFromRemoteFSGather(const RemoteMetadata & metadata_, const String & path_);
 
-    ~ReadBufferFromRemoteFSGather();
-
     String getFileName() const;
 
     void reset();

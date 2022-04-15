@@ -24,7 +24,7 @@ static size_t max_cache_size = (20UL * 1024 * 1024 * 1024);
 
 /// static size_t max_prefetch_size = (4UL * 1024 * 1024 * 1024);
 /// static size_t max_query_cache_size = (4UL * 1024 * 1024 * 1024);
-/// static size_t max_cache_size = (10UL * 1024 * 1024 * 1024);
+/// sstatic size_t max_cache_size = (10UL * 1024 * 1024 * 1024);
 
 
 String GetLocalSlicePath(const String & path, int slice_id)
@@ -129,7 +129,7 @@ std::unique_ptr<WriteBufferFromFileBase> SliceManagement::createRemoteFileToUplo
 {
     if (remote_disk != nullptr)
     {
-        return std::move(remote_disk->writeFile(path, buf_size, mode));
+        return remote_disk->writeFile(path, buf_size, mode);
     }
     else
     {
@@ -151,7 +151,7 @@ SliceManagement::tryToReadSliceFromRemote(const String & key, const ReadSettings
 #ifdef SLICE_DEBUG
             LOG_TRACE(log, "{} exist.", key);
 #endif
-            return std::move(remote_disk->readFile(key, settings, size));
+            return remote_disk->readFile(key, settings, size);
         }
         else
         {

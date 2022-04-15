@@ -397,9 +397,9 @@ public:
     void freeQueryContext(String & query_id);
 
 public:
-    void addSliceManagementCost(uint64_t cost) { slice_management_cost += cost; };
+    void addSliceManagementCost(uint64_t cost) { slice_management_cost += cost; }
 
-    void addSliceBufferCost(uint64_t cost) { slice_buffer_cost += cost; };
+    void addSliceBufferCost(uint64_t cost) { slice_buffer_cost += cost; }
 
     void addSliceNextImplCost(uint64_t cost) { slice_next_impl_cost += cost; }
 
@@ -407,7 +407,7 @@ public:
 
 private:
     /// SliceManagement() = default;
-    SliceManagement() { total_space_size = 512UL * 1024 * 1024; };
+    SliceManagement() { total_space_size = 512UL * 1024 * 1024; }
 
     ~SliceManagement()
     {

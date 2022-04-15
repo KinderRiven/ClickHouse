@@ -54,7 +54,7 @@ public:
         const ReadSettings & settings,
         std::optional<size_t> size);
 
-    ~SliceReadBuffer();
+    ~SliceReadBuffer() override;
 
     std::string getFileName() const override { return remote_data_file->getFileName(); }
 

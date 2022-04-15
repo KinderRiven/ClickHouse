@@ -56,16 +56,6 @@ ReadBufferFromRemoteFSGather::ReadBufferFromRemoteFSGather(const RemoteMetadata 
 {
 }
 
-
-ReadBufferFromRemoteFSGather::~ReadBufferFromRemoteFSGather()
-{
-#ifdef S3_WATCH
-    SliceManagement::instance().addSliceNextImplCost(next_impl_ns.load());
-    LOG_TRACE(trace_log, "[filename:{}][next_impl_cost:{}]", getFileName(), next_impl_ns.load());
-#endif
-}
-
-
 size_t ReadBufferFromRemoteFSGather::readInto(char * data, size_t size, size_t offset, size_t ignore)
 {
     /**
