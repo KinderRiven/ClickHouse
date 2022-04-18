@@ -50,7 +50,7 @@ getCachePtrForDisk(const String & name, const Poco::Util::AbstractConfiguration 
     if (!data_cache_enabled)
         return nullptr;
 
-    auto data_cache_method = config.getString(config_prefix + ".data_cache_method", "LRU");
+    auto data_cache_method = config.getString(config_prefix + ".data_cache_method", "ARC");
 
     auto cache_base_path
         = config.getString(config_prefix + ".data_cache_path", fs::path(context->getPath()) / "disks" / name / "data_cache/");
