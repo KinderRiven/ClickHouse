@@ -96,6 +96,7 @@ add_headers_and_sources(clickhouse_common_io IO/S3)
 list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_delete.cpp)
 
 add_headers_and_sources(dbms Disks/IO)
+add_headers_and_sources(dbms Disks/KV)
 if (TARGET ch_contrib::sqlite)
     add_headers_and_sources(dbms Databases/SQLite)
 endif()
