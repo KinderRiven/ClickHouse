@@ -12,7 +12,7 @@ public:
     const String & getName() const final override { return name; }
 
     /// DiskKV uses a flat KV data model to access data, thus it has no concept of directory.
-    const String & getPath() final override { return path; }
+    const String & getPath() const final override { return path; }
 
     UInt64 getTotalSpace() const override { return std::numeric_limits<UInt64>::max(); }
 

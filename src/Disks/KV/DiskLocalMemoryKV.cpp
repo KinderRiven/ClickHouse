@@ -30,7 +30,7 @@ void DiskLocalMemoryKV::replaceFile(const String &, const String &)
 }
 
 std::unique_ptr<ReadBufferFromFileBase>
-DiskLocalMemoryKV::readFile(const String &, const ReadSettings &, std::optional<size_t>, std::optional<size_t>)
+DiskLocalMemoryKV::readFile(const String &, const ReadSettings &, std::optional<size_t>, std::optional<size_t>) const
 {
     return nullptr;
 }
