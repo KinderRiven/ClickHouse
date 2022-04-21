@@ -3,7 +3,7 @@
 namespace DB
 {
 
-DiskLocalMemoryKV::DiskLocalMemoryKV(String name_, ContextPtr context_) : IDiskKV(name_, "IDiskKV")
+DiskLocalMemoryKV::DiskLocalMemoryKV(String name_, ContextPtr context_) : IDiskKV(name_, "IDiskKV"), context(context_)
 {
 }
 

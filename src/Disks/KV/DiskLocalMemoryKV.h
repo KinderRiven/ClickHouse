@@ -66,7 +66,7 @@ public:
         const String & path,
         const ReadSettings & settings = ReadSettings{},
         std::optional<size_t> read_hint = {},
-        std::optional<size_t> file_size = {}) override;
+        std::optional<size_t> file_size = {}) const override;
 
     std::unique_ptr<WriteBufferFromFileBase> writeFile( /// NOLINT
         const String & path,
@@ -92,6 +92,9 @@ public:
     /// Whether this disk support parallel write
     /// Overrode in remote fs disks.
     bool supportParallelWrite() const override { return false; }
+
+private:
+    ContextPtr context;
 };
 
 };

@@ -7,7 +7,7 @@ namespace DB
 class IDiskKV : public IDisk
 {
 public:
-    IDiskKV(const String &name_, const String &log_name_);
+    IDiskKV(const String & name_, const String & log_name_);
 
     const String & getName() const final override { return name; }
 
@@ -19,9 +19,6 @@ public:
     UInt64 getAvailableSpace() const override { return std::numeric_limits<UInt64>::max(); }
 
     UInt64 getUnreservedSpace() const override { return std::numeric_limits<UInt64>::max(); }
-
-    /// Amount of bytes which should be kept free on the disk.
-    UInt64 getKeepingFreeSpace() const { return 0; }
 
     /// Always return correct, because there is no concept of directory in DiskKV,
     /// and all files are flat stored as KV
@@ -57,12 +54,6 @@ public:
     /// Return iterator to the contents of the specified directory.
     DiskDirectoryIteratorPtr iterateDirectory(const String &) override { return nullptr; }
 
-    /// Because DiskKV has no concept of directory, this function should not be called in DiskKV.
-    bool isDirectoryEmpty(const String &) override
-    {
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method `isDirectoryEmpty() not implemented for disk: {}`", getType());
-    }
-
     /// List files at `path` and add their names to `file_names`
     void listFiles(const String &, std::vector<String> &) override
     {
@@ -76,7 +67,7 @@ public:
     }
 
     /// Remove file or directory with all children. Use with extra caution. Throws exception if file doesn't exists.
-    void removeRecursive(const String & path) override
+    void removeRecursive(const String &) override
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method `removeRecursive() not implemented for disk: {}`", getType());
     }
@@ -115,11 +106,11 @@ public:
     /// Return disk type - "local", "s3", etc.
     DiskType getType() const override { return DiskType::KV; }
 
-    ReservationPtr reserve(UInt64) { return {}; }
+    ReservationPtr reserve(UInt64) override { return {}; }
 
     /// Return some uniq string for file, overrode for IDiskRemote
     /// Required for distinguish different copies of the same part on remote disk
-    String getUniqueId(const String & path) const override { return path; }
+    String getUniqueId(const String & path_) const override { return path_; }
 
     /// Check file exists and ClickHouse has an access to it
     /// Overrode in remote FS disks (s3/hdfs)
