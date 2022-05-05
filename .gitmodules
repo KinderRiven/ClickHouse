@@ -265,3 +265,6 @@
 [submodule "contrib/wyhash"]
 	path = contrib/wyhash
 	url = https://github.com/wangyi-fudan/wyhash.git
+[submodule "contrib/terarkdb"]
+	path = contrib/terarkdb
+	url = https://github.com/bytedance/terarkdb
