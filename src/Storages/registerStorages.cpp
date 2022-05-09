@@ -27,6 +27,7 @@ void registerStorageLiveView(StorageFactory & factory);
 void registerStorageGenerateRandom(StorageFactory & factory);
 void registerStorageExecutable(StorageFactory & factory);
 void registerStorageWindowView(StorageFactory & factory);
+void registerStorageMemoryKV(StorageFactory & factory);
 
 #if USE_AWS_S3
 void registerStorageS3(StorageFactory & factory);
@@ -79,7 +80,6 @@ void registerStorageFileLog(StorageFactory & factory);
 #if USE_SQLITE
 void registerStorageSQLite(StorageFactory & factory);
 #endif
-
 
 void registerStorages()
 {
@@ -156,6 +156,8 @@ void registerStorages()
     #if USE_SQLITE
     registerStorageSQLite(factory);
     #endif
+
+    registerStorageMemoryKV(factory);
 }
 
 }

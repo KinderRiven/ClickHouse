@@ -49,6 +49,19 @@ void EmbeddedRocksDBSink::consume(Chunk chunk)
             elem.type->getDefaultSerialization()->serializeBinary(*elem.column, i, idx == primary_key_pos ? wb_key : wb_value);
             ++idx;
         }
+        String key = wb_key.str();
+        String value = wb_value.str();
+        LOG_INFO(log, "key :{}/{}, value : {}/{}", key, key.size(), value, value.size());
+        for (size_t j = 0; j < key.size(); j++)
+        {
+            auto ch = static_cast<uint8_t>(key[j]);
+            LOG_INFO(log, "key[{}]={}", j, ch);
+        }
+        for (size_t j = 0; j < value.size(); j++)
+        {
+            auto ch = static_cast<uint8_t>(value[j]);
+            LOG_INFO(log, "value[{}]={}", j, ch);
+        }
         status = batch.Put(wb_key.str(), wb_value.str());
         if (!status.ok())
             throw Exception("RocksDB write error: " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);

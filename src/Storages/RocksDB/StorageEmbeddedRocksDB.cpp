@@ -1,39 +1,39 @@
-#include <Storages/RocksDB/StorageEmbeddedRocksDB.h>
 #include <Storages/RocksDB/EmbeddedRocksDBSink.h>
+#include <Storages/RocksDB/StorageEmbeddedRocksDB.h>
 
 #include <DataTypes/DataTypesNumber.h>
 
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageFactory.h>
 
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTSubquery.h>
+#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
-#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTSubquery.h>
 
-#include <IO/WriteBufferFromString.h>
 #include <IO/ReadBufferFromString.h>
+#include <IO/WriteBufferFromString.h>
 
-#include <QueryPipeline/Pipe.h>
 #include <Processors/Sources/SourceWithProgress.h>
+#include <QueryPipeline/Pipe.h>
 
 #include <Interpreters/Context.h>
-#include <Interpreters/Set.h>
 #include <Interpreters/PreparedSets.h>
+#include <Interpreters/Set.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/convertFieldToType.h>
 
+#include <base/sort.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Common/logger_useful.h>
-#include <base/sort.h>
 
+#include <rocksdb/convenience.h>
 #include <rocksdb/db.h>
 #include <rocksdb/table.h>
-#include <rocksdb/convenience.h>
 
 #include <filesystem>
 #include <shared_mutex>
@@ -164,8 +164,8 @@ static bool traverseASTFilter(
 /** Retrieve from the query a condition of the form `key = 'key'`, `key in ('xxx_'), from conjunctions in the WHERE clause.
   * TODO support key like search
   */
-static std::pair<FieldVectorPtr, bool> getFilterKeys(
-    const String & primary_key, const DataTypePtr & primary_key_type, const SelectQueryInfo & query_info)
+static std::pair<FieldVectorPtr, bool>
+getFilterKeys(const String & primary_key, const DataTypePtr & primary_key_type, const SelectQueryInfo & query_info)
 {
     const auto & select = query_info.query->as<ASTSelectQuery &>();
     if (!select.where())
@@ -275,12 +275,16 @@ public:
         {
             ReadBufferFromString key_buffer(iterator->key());
             ReadBufferFromString value_buffer(iterator->value());
+            String key = iterator->key().ToString();
+            String value = iterator->value().ToString();
+            LOG_INFO(log, "key :{}/{}, value : {}/{}", key, key.size(), value, value.size());
             fillColumns(key_buffer, value_buffer, columns);
         }
 
         if (!iterator->status().ok())
         {
-            throw Exception("Engine " + getName() + " got error while seeking key value data: " + iterator->status().ToString(),
+            throw Exception(
+                "Engine " + getName() + " got error while seeking key value data: " + iterator->status().ToString(),
                 ErrorCodes::ROCKSDB_ERROR);
         }
         Block block = sample_block.cloneWithColumns(std::move(columns));
@@ -293,6 +297,7 @@ public:
         for (const auto & elem : getPort().getHeader())
         {
             elem.type->getDefaultSerialization()->deserializeBinary(*columns[idx], idx == primary_key_pos ? key_buffer : value_buffer);
+            LOG_INFO(log, "{} type : {}.", idx, elem.type->getName());
             ++idx;
         }
     }
@@ -312,18 +317,19 @@ private:
     std::unique_ptr<rocksdb::Iterator> iterator = nullptr;
 
     const size_t max_block_size;
+
+    Poco::Logger * log = &Poco::Logger::get("EmbeddedRocksDBSource");
 };
 
 
-StorageEmbeddedRocksDB::StorageEmbeddedRocksDB(const StorageID & table_id_,
-        const String & relative_data_path_,
-        const StorageInMemoryMetadata & metadata_,
-        bool attach,
-        ContextPtr context_,
-        const String & primary_key_)
-    : IStorage(table_id_)
-    , WithContext(context_->getGlobalContext())
-    , primary_key{primary_key_}
+StorageEmbeddedRocksDB::StorageEmbeddedRocksDB(
+    const StorageID & table_id_,
+    const String & relative_data_path_,
+    const StorageInMemoryMetadata & metadata_,
+    bool attach,
+    ContextPtr context_,
+    const String & primary_key_)
+    : IStorage(table_id_), WithContext(context_->getGlobalContext()), primary_key{primary_key_}
 {
     setInMemoryMetadata(metadata_);
     rocksdb_dir = context_->getPath() + relative_data_path_;
@@ -334,7 +340,7 @@ StorageEmbeddedRocksDB::StorageEmbeddedRocksDB(const StorageID & table_id_,
     initDB();
 }
 
-void StorageEmbeddedRocksDB::truncate(const ASTPtr &, const StorageMetadataPtr & , ContextPtr, TableExclusiveLockHolder &)
+void StorageEmbeddedRocksDB::truncate(const ASTPtr &, const StorageMetadataPtr &, ContextPtr, TableExclusiveLockHolder &)
 {
     std::unique_lock<std::shared_mutex> lock(rocksdb_ptr_mx);
     rocksdb_ptr->Close();
@@ -366,8 +372,11 @@ void StorageEmbeddedRocksDB::initDB()
         status = rocksdb::GetDBOptionsFromMap(merged, config_options, &merged);
         if (!status.ok())
         {
-            throw Exception(ErrorCodes::ROCKSDB_ERROR, "Fail to merge rocksdb options from 'rocksdb.options' at: {}: {}",
-                rocksdb_dir, status.ToString());
+            throw Exception(
+                ErrorCodes::ROCKSDB_ERROR,
+                "Fail to merge rocksdb options from 'rocksdb.options' at: {}: {}",
+                rocksdb_dir,
+                status.ToString());
         }
     }
     if (config.has("rocksdb.column_family_options"))
@@ -376,8 +385,11 @@ void StorageEmbeddedRocksDB::initDB()
         status = rocksdb::GetColumnFamilyOptionsFromMap(merged, column_family_options, &merged);
         if (!status.ok())
         {
-            throw Exception(ErrorCodes::ROCKSDB_ERROR, "Fail to merge rocksdb options from 'rocksdb.options' at: {}: {}",
-                rocksdb_dir, status.ToString());
+            throw Exception(
+                ErrorCodes::ROCKSDB_ERROR,
+                "Fail to merge rocksdb options from 'rocksdb.options' at: {}: {}",
+                rocksdb_dir,
+                status.ToString());
         }
     }
 
@@ -401,8 +413,12 @@ void StorageEmbeddedRocksDB::initDB()
                 status = rocksdb::GetDBOptionsFromMap(merged, table_config_options, &merged);
                 if (!status.ok())
                 {
-                    throw Exception(ErrorCodes::ROCKSDB_ERROR, "Fail to merge rocksdb options from '{}' at: {}: {}",
-                        config_key, rocksdb_dir, status.ToString());
+                    throw Exception(
+                        ErrorCodes::ROCKSDB_ERROR,
+                        "Fail to merge rocksdb options from '{}' at: {}: {}",
+                        config_key,
+                        rocksdb_dir,
+                        status.ToString());
                 }
             }
 
@@ -413,8 +429,12 @@ void StorageEmbeddedRocksDB::initDB()
                 status = rocksdb::GetColumnFamilyOptionsFromMap(merged, table_column_family_options, &merged);
                 if (!status.ok())
                 {
-                    throw Exception(ErrorCodes::ROCKSDB_ERROR, "Fail to merge rocksdb options from '{}' at: {}: {}",
-                        config_key, rocksdb_dir, status.ToString());
+                    throw Exception(
+                        ErrorCodes::ROCKSDB_ERROR,
+                        "Fail to merge rocksdb options from '{}' at: {}: {}",
+                        config_key,
+                        rocksdb_dir,
+                        status.ToString());
                 }
             }
         }
@@ -424,20 +444,19 @@ void StorageEmbeddedRocksDB::initDB()
 
     if (!status.ok())
     {
-        throw Exception(ErrorCodes::ROCKSDB_ERROR, "Fail to open rocksdb path at: {}: {}",
-            rocksdb_dir, status.ToString());
+        throw Exception(ErrorCodes::ROCKSDB_ERROR, "Fail to open rocksdb path at: {}: {}", rocksdb_dir, status.ToString());
     }
     rocksdb_ptr = std::unique_ptr<rocksdb::DB>(db);
 }
 
 Pipe StorageEmbeddedRocksDB::read(
-        const Names & column_names,
-        const StorageSnapshotPtr & storage_snapshot,
-        SelectQueryInfo & query_info,
-        ContextPtr /*context*/,
-        QueryProcessingStage::Enum /*processed_stage*/,
-        size_t max_block_size,
-        unsigned num_streams)
+    const Names & column_names,
+    const StorageSnapshotPtr & storage_snapshot,
+    SelectQueryInfo & query_info,
+    ContextPtr /*context*/,
+    QueryProcessingStage::Enum /*processed_stage*/,
+    size_t max_block_size,
+    unsigned num_streams)
 {
     storage_snapshot->check(column_names);
 
@@ -475,14 +494,14 @@ Pipe StorageEmbeddedRocksDB::read(
             size_t end = num_keys * (thread_idx + 1) / num_threads;
 
             pipes.emplace_back(std::make_shared<EmbeddedRocksDBSource>(
-                    *this, sample_block, keys, keys->begin() + begin, keys->begin() + end, max_block_size));
+                *this, sample_block, keys, keys->begin() + begin, keys->begin() + end, max_block_size));
         }
         return Pipe::unitePipes(std::move(pipes));
     }
 }
 
-SinkToStoragePtr StorageEmbeddedRocksDB::write(
-    const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr /*context*/)
+SinkToStoragePtr
+StorageEmbeddedRocksDB::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr /*context*/)
 {
     return std::make_shared<EmbeddedRocksDBSink>(*this, metadata_snapshot);
 }
@@ -519,7 +538,8 @@ std::shared_ptr<rocksdb::Statistics> StorageEmbeddedRocksDB::getRocksDBStatistic
     return rocksdb_ptr->GetOptions().statistics;
 }
 
-std::vector<rocksdb::Status> StorageEmbeddedRocksDB::multiGet(const std::vector<rocksdb::Slice> & slices_keys, std::vector<String> & values) const
+std::vector<rocksdb::Status>
+StorageEmbeddedRocksDB::multiGet(const std::vector<rocksdb::Slice> & slices_keys, std::vector<String> & values) const
 {
     std::shared_lock<std::shared_mutex> lock(rocksdb_ptr_mx);
     if (!rocksdb_ptr)

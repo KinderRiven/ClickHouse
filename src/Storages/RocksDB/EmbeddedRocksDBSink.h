@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Processors/Sinks/SinkToStorage.h>
-
+#include <Common/logger_useful.h>
 
 namespace DB
 {
@@ -24,6 +24,8 @@ private:
     StorageEmbeddedRocksDB & storage;
     StorageMetadataPtr metadata_snapshot;
     size_t primary_key_pos = 0;
+
+    Poco::Logger * log = &Poco::Logger::get("EmbeddedRocksDBSink");
 };
 
 }
