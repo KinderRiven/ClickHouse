@@ -268,4 +268,6 @@
 [submodule "contrib/terarkdb"]
 	path = contrib/terarkdb
 	url = https://github.com/bytedance/terarkdb
-
+[submodule "contrib/FASTER"]
+	path = contrib/FASTER
+	url = https://github.com/microsoft/FASTER
