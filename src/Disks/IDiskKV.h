@@ -120,7 +120,7 @@ public:
 private:
     Poco::Logger * log;
     const String name;
-    const String path = "";
+    const String path{};
 };
 
 };

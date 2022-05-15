@@ -1,5 +1,6 @@
 #include "FileCacheFactory.h"
 #include "FileCache.h"
+#include "RemoteCache.h"
 
 namespace DB
 {
@@ -52,7 +53,7 @@ FileCachePtr FileCacheFactory::get(const std::string & cache_base_path)
 }
 
 FileCachePtr FileCacheFactory::getOrCreate(
-    const std::string & cache_base_path, const FileCacheSettings & file_cache_settings)
+    const std::string & cache_base_path, const FileCacheSettings & file_cache_settings, const DisksMap & map)
 {
     std::lock_guard lock(mutex);
 
@@ -60,9 +61,20 @@ FileCachePtr FileCacheFactory::getOrCreate(
     if (cache_data)
         return cache_data->cache;
 
-    auto cache = std::make_shared<LRUFileCache>(cache_base_path, file_cache_settings);
-    caches.emplace(cache_base_path, CacheData(cache, file_cache_settings));
-    return cache;
+    auto remote_cache_disk = map.find(file_cache_settings.remote_cache);
+    if (remote_cache_disk != map.end())
+    {
+        auto remote_cache = std::make_shared<RemoteCache>(remote_cache_disk->second);
+        auto cache = std::make_shared<LRUFileCache>(cache_base_path, file_cache_settings, remote_cache);
+        caches.emplace(cache_base_path, CacheData(cache, file_cache_settings));
+        return cache;
+    }
+    else
+    {
+        auto cache = std::make_shared<LRUFileCache>(cache_base_path, file_cache_settings, nullptr);
+        caches.emplace(cache_base_path, CacheData(cache, file_cache_settings));
+        return cache;
+    }
 }
 
 }

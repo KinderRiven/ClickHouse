@@ -43,6 +43,8 @@ public:
     enum class ReadType
     {
         CACHED,
+        REMOTE_CACHE_READ_BYPASS_CACHE,
+        REMOTE_CACHE_READ_AND_PUT_IN_CACHE,
         REMOTE_FS_READ_BYPASS_CACHE,
         REMOTE_FS_READ_AND_PUT_IN_CACHE,
     };

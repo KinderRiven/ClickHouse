@@ -340,6 +340,10 @@ SeekableReadBufferPtr CachedReadBufferFromRemoteFS::getImplementationBuffer(File
     auto range = file_segment->range();
     bytes_to_predownload = 0;
 
+    /// get read buffer, read buffer might be
+    /// local cached buffer - CACHED
+    /// read from remote    - REMOTE_FS_READ_AND_PUT_IN_CACHE
+    /// bypass local cache  - REMOTE_FS_READ_BYPASS_CACHE
     auto read_buffer_for_file_segment = getReadBufferForFileSegment(file_segment);
 
     [[maybe_unused]] auto download_current_segment = read_type == ReadType::REMOTE_FS_READ_AND_PUT_IN_CACHE;

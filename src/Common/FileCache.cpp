@@ -32,11 +32,12 @@ namespace
 
 IFileCache::IFileCache(
     const String & cache_base_path_,
-    const FileCacheSettings & cache_settings_)
+    const FileCacheSettings & cache_settings_, RemoteCachePtr remote_cache_)
     : cache_base_path(cache_base_path_)
     , max_size(cache_settings_.max_size)
     , max_element_size(cache_settings_.max_elements)
     , max_file_segment_size(cache_settings_.max_file_segment_size)
+    , remote_cache(remote_cache_)
 {
 }
 
@@ -70,8 +71,8 @@ void IFileCache::assertInitialized() const
         throw Exception(ErrorCodes::REMOTE_FS_OBJECT_CACHE_ERROR, "Cache not initialized");
 }
 
-LRUFileCache::LRUFileCache(const String & cache_base_path_, const FileCacheSettings & cache_settings_)
-    : IFileCache(cache_base_path_, cache_settings_)
+LRUFileCache::LRUFileCache(const String & cache_base_path_, const FileCacheSettings & cache_settings_, RemoteCachePtr remote_cache_)
+    : IFileCache(cache_base_path_, cache_settings_, remote_cache_)
     , log(&Poco::Logger::get("LRUFileCache"))
 {
 }
@@ -646,6 +647,10 @@ void LRUFileCache::remove(
     LOG_TEST(log, "Remove. Key: {}, offset: {}", keyToStr(key), offset);
 
     auto * cell = getCell(key, offset, cache_lock);
+
+    if (remote_cache)
+        remote_cache->add(*this, cell->file_segment);
+    
     if (!cell)
         throw Exception(ErrorCodes::REMOTE_FS_OBJECT_CACHE_ERROR, "No cache cell for key: {}, offset: {}", keyToStr(key), offset);
 

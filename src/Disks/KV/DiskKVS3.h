@@ -5,10 +5,10 @@
 namespace DB
 {
 
-class DiskLocalMemoryKV : public IDiskKV
+class DiskKVS3 : public IDiskKV
 {
 public:
-    DiskLocalMemoryKV(String name_, ContextPtr context_);
+    DiskKVS3(String name_, ContextPtr context_);
 
     bool exists(const String & path) const override;
 

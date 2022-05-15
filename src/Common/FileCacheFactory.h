@@ -2,6 +2,7 @@
 
 #include <Common/FileCache_fwd.h>
 #include <Common/FileCacheSettings.h>
+#include <Interpreters/Context.h>
 
 #include <boost/noncopyable.hpp>
 #include <unordered_map>
@@ -28,7 +29,7 @@ class FileCacheFactory final : private boost::noncopyable
 public:
     static FileCacheFactory & instance();
 
-    FileCachePtr getOrCreate(const std::string & cache_base_path, const FileCacheSettings & file_cache_settings);
+    FileCachePtr getOrCreate(const std::string & cache_base_path, const FileCacheSettings & file_cache_settings, const DisksMap & map);
 
     FileCachePtr get(const std::string & cache_base_path);
 

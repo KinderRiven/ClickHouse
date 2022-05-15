@@ -55,7 +55,8 @@ FileCachePtr getCachePtrForDisk(
     const String & name,
     const Poco::Util::AbstractConfiguration & config,
     const String & config_prefix,
-    ContextPtr context)
+    ContextPtr context, 
+    const DisksMap & map)
 {
     bool data_cache_enabled = config.getBool(config_prefix + ".data_cache_enabled", false);
     if (!data_cache_enabled)
@@ -72,7 +73,7 @@ FileCachePtr getCachePtrForDisk(
     FileCacheSettings file_cache_settings;
     file_cache_settings.loadFromConfig(config, config_prefix);
 
-    auto cache = FileCacheFactory::instance().getOrCreate(cache_base_path, file_cache_settings);
+    auto cache = FileCacheFactory::instance().getOrCreate(cache_base_path, file_cache_settings, map);
     cache->initialize();
 
     auto * log = &Poco::Logger::get("Disk(" + name + ")");

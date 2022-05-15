@@ -178,7 +178,7 @@ void registerDiskS3(DiskFactory & factory)
                       const Poco::Util::AbstractConfiguration & config,
                       const String & config_prefix,
                       ContextPtr context,
-                      const DisksMap & /*map*/) -> DiskPtr {
+                      const DisksMap & map) -> DiskPtr {
         S3::URI uri(Poco::URI(config.getString(config_prefix + ".endpoint")));
 
         if (uri.key.empty())
@@ -189,7 +189,7 @@ void registerDiskS3(DiskFactory & factory)
 
         auto [metadata_path, metadata_disk] = prepareForLocalMetadata(name, config, config_prefix, context);
 
-        FileCachePtr cache = getCachePtrForDisk(name, config, config_prefix, context);
+        FileCachePtr cache = getCachePtrForDisk(name, config, config_prefix, context, map);
 
         std::shared_ptr<IDisk> s3disk = std::make_shared<DiskS3>(
             name,

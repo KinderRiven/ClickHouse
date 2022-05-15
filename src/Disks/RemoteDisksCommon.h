@@ -6,6 +6,7 @@
 #include <Common/thread_local_rng.h>
 #include <Disks/IDisk.h>
 #include <Disks/DiskCacheWrapper.h>
+#include <Interpreters/Context.h>
 #include <Common/getRandomASCIIString.h>
 
 
@@ -25,6 +26,7 @@ FileCachePtr getCachePtrForDisk(
     const String & name,
     const Poco::Util::AbstractConfiguration & config,
     const String & config_prefix,
-    ContextPtr context);
+    ContextPtr context,
+    const DisksMap & map);
 
 }

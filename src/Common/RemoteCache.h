@@ -1,0 +1,86 @@
+#pragma once
+
+#include <atomic>
+#include <chrono>
+#include <list>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+#include <unordered_set>
+#include <Core/Types.h>
+#include <Disks/IDisk.h>
+#include <boost/noncopyable.hpp>
+#include <Common/FileSegment.h>
+#include <Common/logger_useful.h>
+#include "FileCache_fwd.h"
+
+namespace DB
+{
+
+class IFileCache;
+class RemoteCache;
+using RemoteCachePtr = std::shared_ptr<RemoteCache>;
+
+class RemoteCache : private boost::noncopyable
+{
+public:
+    using Key = UInt128;
+
+    RemoteCache(DiskPtr disk_);
+
+    void add(IFileCache & cache, FileSegmentPtr segment);
+
+private:
+    class LRUQueue
+    {
+    public:
+        struct LRUQueueElement
+        {
+            FileSegmentPtr segment;
+            int access;
+        };
+
+    public:
+        using Iterator = typename std::list<LRUQueueElement>::iterator;
+
+        size_t getElementsNum(std::lock_guard<std::mutex> & /* cache_lock */) const { return queue.size(); }
+
+        Iterator add(FileSegmentPtr file_segment, std::lock_guard<std::mutex> & cache_lock);
+
+        void remove(Iterator queue_it, std::lock_guard<std::mutex> & cache_lock);
+
+        void moveToEnd(Iterator queue_it, std::lock_guard<std::mutex> & cache_lock);
+
+        bool contains(FileSegmentPtr file_segment, std::lock_guard<std::mutex> & cache_lock) const;
+
+        Iterator begin() { return queue.begin(); }
+
+        Iterator end() { return queue.end(); }
+
+    private:
+        std::list<LRUQueueElement> queue;
+    };
+
+    using KeyAndOffset = std::pair<Key, size_t>;
+    using FileSegmentMap = std::map<KeyAndOffset, LRUQueue::Iterator>;
+
+private:
+    String getPathInRemoteCache(const Key & key);
+
+    String getPathInRemoteCache(const Key & key, size_t offset);
+
+    void downloadToRemote(IFileCache & cache, FileSegmentPtr segment);
+
+    FileSegmentMap stash;
+    LRUQueue queue;
+    DiskPtr disk;
+
+    size_t max_stash_element;
+    int download_threshold;
+
+    mutable std::mutex mutex;
+    Poco::Logger * log;
+};
+
+};
