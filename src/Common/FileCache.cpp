@@ -331,13 +331,18 @@ void LRUFileCache::tryDownloadEmptyFromRemoteCache(FileSegments & file_segments,
             {
                 if (remote_file_segment_size == file_segment->range().size())
                 {
+                    LOG_INFO(
+                        log,
+                        "[tryDownloadEmptyFromRemoteCache] find file_segment {} range {} in remote cache.",
+                        keyToStr(file_segment->key()),
+                        file_segment->range().toString());
                     remote_cache->getReadBuffer(file_segment->key(), file_segment->offset());
                 }
                 else
                 {
-                    throw Exception(
-                        ErrorCodes::LOGICAL_ERROR,
-                        "local file_segment {} range {} not match remote file_segment [{},{}]",
+                    LOG_INFO(
+                        log,
+                        "[tryDownloadEmptyFromRemoteCache] local file_segment {} range {} not match remote file_segment [{},{}]",
                         keyToStr(file_segment->key()),
                         file_segment->range().toString(),
                         file_segment->offset(),

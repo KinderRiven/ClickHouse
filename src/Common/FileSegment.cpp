@@ -14,6 +14,11 @@ extern const Metric CacheDetachedFileSegments;
 namespace DB
 {
 
+namespace
+{
+    /// String keyToStr(const IFileCache::Key & key) { return getHexUIntLowercase(key); }
+}
+
 namespace ErrorCodes
 {
     extern const int REMOTE_FS_OBJECT_CACHE_ERROR;
@@ -523,7 +528,7 @@ void FileSegment::completeUnlocked(std::lock_guard<std::mutex> & cache_lock, std
 
     if (isDownloaderImpl(segment_lock) && download_state != State::DOWNLOADED && (getDownloadedSize(segment_lock) == range().size()))
     {
-       setDownloaded(segment_lock);
+        setDownloaded(segment_lock);
     }
 
     assertNotDetached();
