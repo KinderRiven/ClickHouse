@@ -1,12 +1,16 @@
 #pragma once
 
-#include <boost/noncopyable.hpp>
-#include <IO/WriteBufferFromFile.h>
+#include <list>
 #include <Core/Types.h>
 #include <IO/SeekableReadBuffer.h>
-#include <list>
+#include <IO/WriteBufferFromFile.h>
+#include <boost/noncopyable.hpp>
+#include <Common/logger_useful.h>
 
-namespace Poco { class Logger; }
+namespace Poco
+{
+class Logger;
+}
 
 namespace CurrentMetrics
 {
@@ -25,8 +29,8 @@ using FileSegments = std::list<FileSegmentPtr>;
 
 class FileSegment : boost::noncopyable
 {
-friend class LRUFileCache;
-friend struct FileSegmentsHolder;
+    friend class LRUFileCache;
+    friend struct FileSegmentsHolder;
 
 public:
     using Key = UInt128;
@@ -68,12 +72,13 @@ public:
     };
 
     FileSegment(
-        size_t offset_, size_t size_, const Key & key_,
-        IFileCache * cache_, State download_state_);
+        size_t offset_, size_t size_, const Key & key_, IFileCache * cache_, State download_state_, bool support_cached_in_remote_ = true);
 
     ~FileSegment();
 
     State state() const;
+
+    State stateUnlock() const;
 
     static String stateToString(FileSegment::State state);
 
@@ -83,7 +88,7 @@ public:
         size_t left;
         size_t right;
 
-        Range(size_t left_, size_t right_) : left(left_), right(right_) {}
+        Range(size_t left_, size_t right_) : left(left_), right(right_) { }
 
         bool operator==(const Range & other) const { return left == other.left && right == other.right; }
 
@@ -153,6 +158,8 @@ public:
 
     void detach(std::lock_guard<std::mutex> & cache_lock, std::lock_guard<std::mutex> & segment_lock);
 
+    bool supportRemoteCache() const { return support_cached_in_remote; }
+
 private:
     size_t availableSize() const { return reserved_size - downloaded_size; }
 
@@ -180,9 +187,7 @@ private:
     void complete(std::lock_guard<std::mutex> & cache_lock);
     void completeUnlocked(std::lock_guard<std::mutex> & cache_lock, std::lock_guard<std::mutex> & segment_lock);
 
-    void completeImpl(
-        std::lock_guard<std::mutex> & cache_lock,
-        std::lock_guard<std::mutex> & segment_lock);
+    void completeImpl(std::lock_guard<std::mutex> & cache_lock, std::lock_guard<std::mutex> & segment_lock);
 
     void resetDownloaderImpl(std::lock_guard<std::mutex> & segment_lock);
 
@@ -210,7 +215,7 @@ private:
 
     Key file_key;
     IFileCache * cache;
-
+    mutable bool support_cached_in_remote;
     Poco::Logger * log;
 
     /// "detached" file segment means that it is not owned by cache ("detached" from cache).
@@ -226,8 +231,8 @@ private:
 
 struct FileSegmentsHolder : private boost::noncopyable
 {
-    explicit FileSegmentsHolder(FileSegments && file_segments_) : file_segments(std::move(file_segments_)) {}
-    FileSegmentsHolder(FileSegmentsHolder && other) noexcept : file_segments(std::move(other.file_segments)) {}
+    explicit FileSegmentsHolder(FileSegments && file_segments_) : file_segments(std::move(file_segments_)) { }
+    FileSegmentsHolder(FileSegmentsHolder && other) noexcept : file_segments(std::move(other.file_segments)) { }
 
     ~FileSegmentsHolder();
 

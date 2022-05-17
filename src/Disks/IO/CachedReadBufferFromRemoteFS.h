@@ -1,11 +1,11 @@
 #pragma once
 
-#include <Common/FileCache.h>
+#include <IO/ReadSettings.h>
 #include <IO/SeekableReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
-#include <IO/ReadSettings.h>
-#include <Common/logger_useful.h>
 #include <Interpreters/FilesystemCacheLog.h>
+#include <Common/FileCache.h>
+#include <Common/logger_useful.h>
 
 
 namespace CurrentMetrics
@@ -26,7 +26,8 @@ public:
         FileCachePtr cache_,
         RemoteFSFileReaderCreator remote_file_reader_creator_,
         const ReadSettings & settings_,
-        size_t read_until_position_);
+        size_t read_until_position_,
+        size_t file_size_);
 
     bool nextImpl() override;
 
@@ -43,7 +44,6 @@ public:
     enum class ReadType
     {
         CACHED,
-        REMOTE_CACHE_READ_BYPASS_CACHE,
         REMOTE_CACHE_READ_AND_PUT_IN_CACHE,
         REMOTE_FS_READ_BYPASS_CACHE,
         REMOTE_FS_READ_AND_PUT_IN_CACHE,
@@ -70,6 +70,8 @@ private:
 
     SeekableReadBufferPtr getRemoteFSReadBuffer(FileSegmentPtr & file_segment, ReadType read_type_);
 
+    SeekableReadBufferPtr getRemoteCacheReadBuffer(ReadType read_type_, size_t offset);
+
     size_t getTotalSizeToRead();
     bool completeFileSegmentAndGetNext();
 
@@ -82,6 +84,7 @@ private:
     ReadSettings settings;
 
     size_t read_until_position;
+    size_t file_size;
     size_t file_offset_of_buffer_end = 0;
     size_t bytes_to_predownload = 0;
 
@@ -104,6 +107,8 @@ private:
         {
             case ReadType::CACHED:
                 return "CACHED";
+            case ReadType::REMOTE_CACHE_READ_AND_PUT_IN_CACHE:
+                return "REMOTE_CACHE_READ_AND_PUT_IN_CACHE";
             case ReadType::REMOTE_FS_READ_BYPASS_CACHE:
                 return "REMOTE_FS_READ_BYPASS_CACHE";
             case ReadType::REMOTE_FS_READ_AND_PUT_IN_CACHE:

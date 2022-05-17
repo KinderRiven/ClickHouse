@@ -14,6 +14,8 @@ static String typeToString(FilesystemCacheLogElement::ReadType type)
     {
         case FilesystemCacheLogElement::ReadType::READ_FROM_CACHE:
             return "READ_FROM_CACHE";
+        case FilesystemCacheLogElement::ReadType::READ_FROM_CACHE_AND_DOWNLOADED_TO_CACHE:
+            return "READ_FROM_CACHE_AND_DOWNLOADED_TO_CACHE";
         case FilesystemCacheLogElement::ReadType::READ_FROM_FS_AND_DOWNLOADED_TO_CACHE:
             return "READ_FROM_FS_AND_DOWNLOADED_TO_CACHE";
         case FilesystemCacheLogElement::ReadType::READ_FROM_FS_BYPASSING_CACHE:

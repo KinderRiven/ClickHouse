@@ -29,7 +29,11 @@ public:
 
     RemoteCache(DiskPtr disk_);
 
-    void add(IFileCache & cache, FileSegmentPtr segment);
+    void add(IFileCache & cache, FileSegmentPtr file_segment);
+
+    size_t getFileSegmentSize(const Key & key, size_t offset);
+
+    std::unique_ptr<ReadBufferFromFileBase> getReadBuffer(const Key & key, size_t offset);
 
 private:
     class LRUQueue
@@ -37,7 +41,8 @@ private:
     public:
         struct LRUQueueElement
         {
-            FileSegmentPtr segment;
+            Key key;
+            size_t offset;
             int access;
         };
 
@@ -70,12 +75,12 @@ private:
 
     String getPathInRemoteCache(const Key & key, size_t offset);
 
-    void downloadToRemote(IFileCache & cache, FileSegmentPtr segment);
+    void downloadToRemote(IFileCache & cache, FileSegmentPtr file_segment, std::lock_guard<std::mutex> & lock);
 
-    FileSegmentMap stash;
-    LRUQueue queue;
+    FileSegmentMap stash_map;
+    LRUQueue stash_queue;
+
     DiskPtr disk;
-
     size_t max_stash_element;
     int download_threshold;
 

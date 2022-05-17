@@ -34,6 +34,8 @@ public:
 
     IFileCache(const String & cache_base_path_, const FileCacheSettings & cache_settings_, RemoteCachePtr remote_cache_);
 
+    RemoteCachePtr getRemoteCache() const { return remote_cache; }
+
     virtual ~IFileCache() = default;
 
     /// Restore cache from local filesystem.
@@ -69,7 +71,7 @@ public:
      * As long as pointers to returned file segments are hold
      * it is guaranteed that these file segments are not removed from cache.
      */
-    virtual FileSegmentsHolder getOrSet(const Key & key, size_t offset, size_t size) = 0;
+    virtual FileSegmentsHolder getOrSet(const Key & key, size_t offset, size_t size, size_t file_size = 0) = 0;
 
     /**
      * Segments in returned list are ordered in ascending order and represent a full contiguous
@@ -80,7 +82,7 @@ public:
      * with the destruction of the holder, while in getOrSet() EMPTY file segments can eventually change
      * it's state (and become DOWNLOADED).
      */
-    virtual FileSegmentsHolder get(const Key & key, size_t offset, size_t size) = 0;
+    virtual FileSegmentsHolder get(const Key & key, size_t offset, size_t size, size_t file_size = 0) = 0;
 
     virtual FileSegmentsHolder setDownloading(const Key & key, size_t offset, size_t size) = 0;
 
@@ -129,9 +131,9 @@ class LRUFileCache final : public IFileCache
 public:
     LRUFileCache(const String & cache_base_path_, const FileCacheSettings & cache_settings_, RemoteCachePtr remote_cache_ = nullptr);
 
-    FileSegmentsHolder getOrSet(const Key & key, size_t offset, size_t size) override;
+    FileSegmentsHolder getOrSet(const Key & key, size_t offset, size_t size, size_t file_size = 0) override;
 
-    FileSegmentsHolder get(const Key & key, size_t offset, size_t size) override;
+    FileSegmentsHolder get(const Key & key, size_t offset, size_t size, size_t file_size = 0) override;
 
     FileSegments getSnapshot() const override;
 
@@ -255,6 +257,8 @@ private:
         const FileSegment::Range & range,
         bool fill_with_detached_file_segments,
         std::lock_guard<std::mutex> & cache_lock);
+
+    void tryDownloadEmptyFromRemoteCache(FileSegments & file_segments, std::lock_guard<std::mutex> & cache_lock);
 
     size_t getUsedCacheSizeUnlocked(std::lock_guard<std::mutex> & cache_lock) const;
 
