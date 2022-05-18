@@ -7,6 +7,7 @@
 #include <IO/ReadSettings.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteBufferFromString.h>
+#include <IO/copyData.h>
 #include <pcg-random/pcg_random.hpp>
 #include <Common/FileCacheSettings.h>
 #include <Common/SipHash.h>
@@ -336,7 +337,6 @@ void LRUFileCache::tryDownloadEmptyFromRemoteCache(FileSegments & file_segments,
                         "[tryDownloadEmptyFromRemoteCache] find file_segment {} range {} in remote cache.",
                         keyToStr(file_segment->key()),
                         file_segment->range().toString());
-                    remote_cache->getReadBuffer(file_segment->key(), file_segment->offset());
                 }
                 else
                 {
@@ -348,6 +348,15 @@ void LRUFileCache::tryDownloadEmptyFromRemoteCache(FileSegments & file_segments,
                         file_segment->offset(),
                         file_segment->offset() + remote_file_segment_size - 1);
                 }
+            }
+            else
+            {
+                LOG_INFO(
+                    log,
+                    "[tryDownloadEmptyFromRemoteCache] cannot find file_segment {} range {} in local/remote cache.",
+                    keyToStr(file_segment->key()),
+                    file_segment->range().toString());
+                remote_cache->getReadBuffer(file_segment->key(), file_segment->offset());
             }
         }
     }
@@ -394,8 +403,8 @@ FileSegmentsHolder LRUFileCache::getOrSet(const Key & key, size_t offset, size_t
         fillHolesWithEmptyFileSegments(file_segments, key, range, false, cache_lock);
     }
 
-    if (remote_cache)
-        tryDownloadEmptyFromRemoteCache(file_segments, cache_lock);
+    /// if (remote_cache)
+    ///    tryDownloadEmptyFromRemoteCache(file_segments, cache_lock);
 
     assert(!file_segments.empty());
     return FileSegmentsHolder(std::move(file_segments));

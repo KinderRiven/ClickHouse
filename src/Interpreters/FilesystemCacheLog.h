@@ -27,7 +27,7 @@ struct FilesystemCacheLogElement
     enum class ReadType
     {
         READ_FROM_CACHE,
-        READ_FROM_CACHE_AND_DOWNLOADED_TO_CACHE,
+        READ_FROM_REMOTE_CACHE_AND_DOWNLOADED_TO_CACHE,
         READ_FROM_FS_AND_DOWNLOADED_TO_CACHE,
         READ_FROM_FS_BYPASSING_CACHE,
     };

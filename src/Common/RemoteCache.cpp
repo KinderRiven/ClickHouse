@@ -13,7 +13,7 @@ namespace
 }
 
 RemoteCache::RemoteCache(DiskPtr disk_)
-    : disk(disk_), max_stash_element(1024), download_threshold(1), log(&Poco::Logger::get("RemoteCache"))
+    : disk(disk_), max_stash_element(1024), download_threshold(0), log(&Poco::Logger::get("RemoteCache"))
 {
     if (disk != nullptr)
         LOG_INFO(log, "remote cache disk {}", disk->getName());
@@ -32,26 +32,16 @@ void RemoteCache::add(IFileCache & cache, FileSegmentPtr file_segment)
         queue_it->second->access++;
         if (queue_it->second->access >= download_threshold)
         {
-            LOG_INFO(
-                log,
-                "downloading file_segment [key:{}][offset:{}][size:{}] to remote cache.",
-                keyToStr(file_segment->key()),
-                file_segment->offset(),
-                file_segment->range().size());
+            /// LOG_INFO(log, "downloading file_segment [key:{}][offset:{}][size:{}] to remote cache.",
+            ///     keyToStr(file_segment->key()), file_segment->offset(), file_segment->range().size());
             downloadToRemote(cache, file_segment, lock);
         }
         stash_queue.moveToEnd(queue_it->second, lock);
     }
     else
     {
-        LOG_INFO(
-            log,
-            "add file_segment [key:{}][offset:{}][size:{}] to stash [{}/{}].",
-            keyToStr(file_segment->key()),
-            file_segment->offset(),
-            file_segment->range().size(),
-            stash_queue.getElementsNum(lock),
-            max_stash_element);
+        /// LOG_INFO(log, "add file_segment [key:{}][offset:{}][size:{}] to stash [{}/{}].",
+        ///    keyToStr(file_segment->key()), file_segment->offset(), file_segment->range().size(), stash_queue.getElementsNum(lock), max_stash_element);
 
         auto iter = stash_queue.add(file_segment, lock);
         stash_map.insert({{file_segment->key(), file_segment->offset()}, iter});
@@ -63,6 +53,9 @@ void RemoteCache::add(IFileCache & cache, FileSegmentPtr file_segment)
             stash_map.erase(rm_map_iter);
             stash_queue.remove(rm_queue_iter, lock);
         }
+
+        if (iter->access >= download_threshold)
+            downloadToRemote(cache, file_segment, lock);
     }
 }
 

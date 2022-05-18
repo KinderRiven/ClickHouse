@@ -52,6 +52,8 @@ public:
 private:
     void initialize(size_t offset, size_t size);
 
+    bool canDownloadFromRmoteCache(size_t offset, size_t size);
+
     SeekableReadBufferPtr getImplementationBuffer(FileSegmentPtr & file_segment);
 
     SeekableReadBufferPtr getReadBufferForFileSegment(FileSegmentPtr & file_segment);
@@ -70,7 +72,7 @@ private:
 
     SeekableReadBufferPtr getRemoteFSReadBuffer(FileSegmentPtr & file_segment, ReadType read_type_);
 
-    SeekableReadBufferPtr getRemoteCacheReadBuffer(ReadType read_type_, size_t offset);
+    SeekableReadBufferPtr getRemoteCacheReadBuffer(FileSegmentPtr & file_segment, ReadType read_type_);
 
     size_t getTotalSizeToRead();
     bool completeFileSegmentAndGetNext();
