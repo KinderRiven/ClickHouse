@@ -20,6 +20,8 @@ static String typeToString(FilesystemCacheLogElement::ReadType type)
             return "READ_FROM_FS_AND_DOWNLOADED_TO_CACHE";
         case FilesystemCacheLogElement::ReadType::READ_FROM_FS_BYPASSING_CACHE:
             return "READ_FROM_FS_BYPASSING_CACHE";
+        case FilesystemCacheLogElement::ReadType::READ_FROM_REMOTE_CACHE_BYPASSING_CACHE:
+            return "READ_FROM_REMOTE_CACHE_BYPASSING_CACHE";
     }
     __builtin_unreachable();
 }

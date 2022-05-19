@@ -45,6 +45,7 @@ public:
     {
         CACHED,
         REMOTE_CACHE_READ_AND_PUT_IN_CACHE,
+        REMOTE_CACHE_READ_BYPASS_CACHE,
         REMOTE_FS_READ_BYPASS_CACHE,
         REMOTE_FS_READ_AND_PUT_IN_CACHE,
     };
@@ -75,6 +76,7 @@ private:
     SeekableReadBufferPtr getRemoteCacheReadBuffer(FileSegmentPtr & file_segment, ReadType read_type_);
 
     size_t getTotalSizeToRead();
+
     bool completeFileSegmentAndGetNext();
 
     void appendFilesystemCacheLog(const FileSegment::Range & file_segment_range, ReadType read_type);
@@ -115,6 +117,8 @@ private:
                 return "REMOTE_FS_READ_BYPASS_CACHE";
             case ReadType::REMOTE_FS_READ_AND_PUT_IN_CACHE:
                 return "REMOTE_FS_READ_AND_PUT_IN_CACHE";
+            case ReadType::REMOTE_CACHE_READ_BYPASS_CACHE:
+                return "REMOTE_CACHE_READ_BYPASS_CACHE";
         }
         __builtin_unreachable();
     }

@@ -59,8 +59,13 @@ FileSegment::FileSegment(
             downloader_id = getCallerId();
             break;
         }
+        /// Determine whether the filesegment needs to be downloaded,  only the frequently accessed 
+        /// filesegment will be downloaded.
+        case (State::SKIP_CACHE): {
+            break;
+        }
         default: {
-            throw Exception(ErrorCodes::REMOTE_FS_OBJECT_CACHE_ERROR, "Can create cell with either EMPTY, DOWNLOADED, DOWNLOADING state");
+            throw Exception(ErrorCodes::REMOTE_FS_OBJECT_CACHE_ERROR, "Can create cell with either EMPTY, DOWNLOADED, DOWNLOADING, SKIP_CACHE state");
         }
     }
 }

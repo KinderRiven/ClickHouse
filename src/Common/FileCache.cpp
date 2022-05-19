@@ -34,6 +34,7 @@ IFileCache::IFileCache(const String & cache_base_path_, const FileCacheSettings 
     , max_size(cache_settings_.max_size)
     , max_element_size(cache_settings_.max_elements)
     , max_file_segment_size(cache_settings_.max_file_segment_size)
+    , can_download_hits(cache_settings_.can_download_hits)
     , remote_cache(remote_cache_)
 {
 }
@@ -211,6 +212,7 @@ FileSegments LRUFileCache::splitRangeIntoCells(
     size_t remaining_size = size;
 
     FileSegments file_segments;
+
     while (current_pos < end_pos_non_included)
     {
         current_cell_size = std::min(remaining_size, max_file_segment_size);
@@ -327,7 +329,7 @@ void LRUFileCache::tryDownloadEmptyFromRemoteCache(FileSegments & file_segments,
     {
         if (file_segment->state() == FileSegment::State::EMPTY)
         {
-            auto remote_file_segment_size = remote_cache->getFileSegmentSize(file_segment->key(), file_segment->offset());
+            auto remote_file_segment_size = remote_cache->getFileSegmentSizeFromRemoteCache(file_segment->key(), file_segment->offset());
             if (remote_file_segment_size > 0)
             {
                 if (remote_file_segment_size == file_segment->range().size())
@@ -356,7 +358,6 @@ void LRUFileCache::tryDownloadEmptyFromRemoteCache(FileSegments & file_segments,
                     "[tryDownloadEmptyFromRemoteCache] cannot find file_segment {} range {} in local/remote cache.",
                     keyToStr(file_segment->key()),
                     file_segment->range().toString());
-                remote_cache->getReadBuffer(file_segment->key(), file_segment->offset());
             }
         }
     }
@@ -405,7 +406,6 @@ FileSegmentsHolder LRUFileCache::getOrSet(const Key & key, size_t offset, size_t
 
     /// if (remote_cache)
     ///    tryDownloadEmptyFromRemoteCache(file_segments, cache_lock);
-
     assert(!file_segments.empty());
     return FileSegmentsHolder(std::move(file_segments));
 }
@@ -709,7 +709,7 @@ void LRUFileCache::remove(
     auto * cell = getCell(key, offset, cache_lock);
 
     if (remote_cache)
-        remote_cache->add(*this, cell->file_segment);
+        remote_cache->tryUploadToRemoteCache(*this, cell->file_segment);
 
     if (!cell)
         throw Exception(ErrorCodes::REMOTE_FS_OBJECT_CACHE_ERROR, "No cache cell for key: {}, offset: {}", keyToStr(key), offset);
@@ -947,13 +947,14 @@ LRUFileCache::FileSegmentCell::FileSegmentCell(FileSegmentPtr file_segment_, LRU
             break;
         }
         case FileSegment::State::EMPTY:
+        case FileSegment::State::SKIP_CACHE:
         case FileSegment::State::DOWNLOADING: {
             break;
         }
         default:
             throw Exception(
                 ErrorCodes::REMOTE_FS_OBJECT_CACHE_ERROR,
-                "Can create cell with either EMPTY, DOWNLOADED, DOWNLOADING state, got: {}",
+                "Can create cell with either EMPTY, DOWNLOADED, DOWNLOADING, SKIP_CACHE state, got: {}",
                 FileSegment::stateToString(file_segment->download_state));
     }
 }

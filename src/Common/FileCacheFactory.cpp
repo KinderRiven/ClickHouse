@@ -52,8 +52,8 @@ FileCachePtr FileCacheFactory::get(const std::string & cache_base_path)
     throw Exception(ErrorCodes::BAD_ARGUMENTS, "No cache found by path: {}", cache_base_path);
 }
 
-FileCachePtr FileCacheFactory::getOrCreate(
-    const std::string & cache_base_path, const FileCacheSettings & file_cache_settings, const DisksMap & map)
+FileCachePtr
+FileCacheFactory::getOrCreate(const std::string & cache_base_path, const FileCacheSettings & file_cache_settings, const DisksMap & map)
 {
     std::lock_guard lock(mutex);
 
@@ -64,14 +64,15 @@ FileCachePtr FileCacheFactory::getOrCreate(
     auto remote_cache_disk = map.find(file_cache_settings.remote_cache);
     if (remote_cache_disk != map.end())
     {
-        auto remote_cache = std::make_shared<RemoteCache>(remote_cache_disk->second);
+        auto remote_cache = std::make_shared<RemoteCache>(remote_cache_disk->second, file_cache_settings.upload_to_remote_cache_threshold);
         auto cache = std::make_shared<LRUFileCache>(cache_base_path, file_cache_settings, remote_cache);
         caches.emplace(cache_base_path, CacheData(cache, file_cache_settings));
         return cache;
     }
     else
     {
-        auto cache = std::make_shared<LRUFileCache>(cache_base_path, file_cache_settings, nullptr);
+        auto remote_cache = std::make_shared<RemoteCache>(nullptr);
+        auto cache = std::make_shared<LRUFileCache>(cache_base_path, file_cache_settings, remote_cache);
         caches.emplace(cache_base_path, CacheData(cache, file_cache_settings));
         return cache;
     }

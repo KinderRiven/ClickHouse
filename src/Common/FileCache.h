@@ -16,7 +16,6 @@
 #include <Common/logger_useful.h>
 #include "FileCache_fwd.h"
 
-
 namespace DB
 {
 
@@ -95,6 +94,8 @@ public:
 
     virtual size_t getFileSegmentsNum() const = 0;
 
+    size_t getCanDownloadHits() const { return can_download_hits; }
+
 protected:
     String cache_base_path;
     size_t max_size;
@@ -104,6 +105,8 @@ protected:
     bool is_initialized = false;
 
     mutable std::mutex mutex;
+
+    size_t can_download_hits;
 
     RemoteCachePtr remote_cache;
 

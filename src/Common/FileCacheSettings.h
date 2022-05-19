@@ -13,6 +13,8 @@ struct FileCacheSettings
     size_t max_size = 0;
     size_t max_elements = REMOTE_FS_OBJECTS_CACHE_DEFAULT_MAX_ELEMENTS;
     size_t max_file_segment_size = REMOTE_FS_OBJECTS_CACHE_DEFAULT_MAX_FILE_SEGMENT_SIZE;
+    size_t can_download_hits = 5;
+    size_t upload_to_remote_cache_threshold = 5;
     bool cache_on_write_operations = false;
     std::string remote_cache {};
 
