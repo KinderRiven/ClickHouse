@@ -268,3 +268,6 @@
 [submodule "contrib/hashidsxx"]
 	path = contrib/hashidsxx
 	url = https://github.com/schoentoon/hashidsxx.git
+[submodule "contrib/splinterdb"]
+	path = contrib/splinterdb
+	url = https://github.com/vmware/splinterdb
