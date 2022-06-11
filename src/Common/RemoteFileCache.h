@@ -1,5 +1,6 @@
 #pragma once
 
+#include <unordered_map>
 #include <Common/FileCache.h>
 #include <Common/logger_useful.h>
 
@@ -57,8 +58,28 @@ private:
         bool fill_with_detached_file_segments,
         std::lock_guard<std::mutex> & cache_lock);
 
+    void appendCacheLogEntry(const Key & key, size_t offset);
+
 private:
     Poco::Logger * log;
+
+    struct CacheTraceEntry
+    {
+        UInt64 hits = 0;
+        UInt64 last_used_time = 0;
+        /// future feature : query weight
+
+        /// 1.frequency = hits / (2 ^ 16)
+        /// 2.timestamp = lastusedtime / (2 ^ 8)
+        double frequency = 0;
+        double timestamp = 0;
+
+        void update() { }
+    };
+
+    using CacheTrace = std::unordered_map<AccessKeyAndOffset, std::shared_ptr<CacheTraceEntry>, KeyAndOffsetHash>;
+
+    CacheTrace trace;
 };
 
 };

@@ -360,6 +360,10 @@ int copy_decompressor(const char *self, int output_fd)
     } while (true);
 
     close(input_fd);
+<<<<<<< HEAD
+=======
+    delete []buf;
+>>>>>>> fix
     return 0;
 }
 
