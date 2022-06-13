@@ -1,4 +1,6 @@
 #include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <map>
 #include <Common/RemoteFileCache.h>
 #include <Common/hex.h>
@@ -16,10 +18,24 @@ namespace ErrorCodes
 
 namespace
 {
-    /// String keyToStr(const IFileCache::Key & key)
-    /// {
-    ///     return getHexUIntLowercase(key);
-    /// }
+    String keyToStr(const IFileCache::Key & key)
+    {
+        return getHexUIntLowercase(key);
+    }
+}
+
+inline UInt64 time_in_microseconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
+{
+    return std::chrono::duration_cast<std::chrono::microseconds>(timepoint.time_since_epoch()).count();
+}
+
+inline String get_time_string()
+{
+    time_t timep;
+    time(&timep);
+    char tmp[64];
+    strftime(tmp, sizeof(tmp), "%Y_%m_%d_%H_%M_%S", localtime(&timep));
+    return tmp;
 }
 
 RemoteFileCache::RemoteFileCache(const String & cache_base_path_, const FileCacheSettings & cache_settings_)
@@ -46,18 +62,51 @@ std::vector<String> RemoteFileCache::tryGetCachePaths(const Key &)
     return {};
 }
 
-void RemoteFileCache::appendCacheLogEntry(const Key & key, size_t offset)
+void RemoteFileCache::appendCacheLogEntry(const Key & key, size_t offset, size_t size, std::lock_guard<std::mutex> &)
 {
-    auto iter = trace.find({key, offset});
-    if (iter == trace.end())
-    {
-        auto log_entry = std::make_shared<CacheTraceEntry>();
-        iter = trace.insert({{key, offset}, log_entry}).first;
-    }
-    iter->second->update();
+    cache_log.emplace_back(RemoteFileCache::CacheLogEntry(key, offset, size));
 }
 
-FileSegments RemoteFileCache::getImpl(const Key & key, size_t offset, size_t)
+String RemoteFileCache::getCacheLogPath()
+{
+    auto log_base_path = fs::path(cache_base_path) / "cache_log";
+
+    if (!fs::exists(log_base_path))
+        fs::create_directories(log_base_path);
+
+    return fs::path(log_base_path) / get_time_string();
+}
+
+void RemoteFileCache::outputCacheLogIfNeeded(std::lock_guard<std::mutex> &)
+{
+    if (cache_log.size() > 1000UL)
+    {
+        std::ofstream ostr(getCacheLogPath());
+        for (const auto & cache_log_entry : cache_log)
+        {
+            ostr << keyToStr(cache_log_entry.key) << "," << cache_log_entry.offset << "," << cache_log_entry.size << ","
+                 << cache_log_entry.used_time << std::endl;
+        }
+        ostr.close();
+        cache_log.clear();
+    }
+}
+
+void RemoteFileCache::dumpCacheLog()
+{
+    for (const auto & cache_log_entry : cache_log)
+    {
+        LOG_INFO(
+            log,
+            "[key:{}][offset:{}][size:{}][time:{}]",
+            keyToStr(cache_log_entry.key),
+            cache_log_entry.offset,
+            cache_log_entry.size,
+            cache_log_entry.used_time);
+    }
+}
+
+FileSegments RemoteFileCache::getImpl(const Key & key, size_t offset, size_t size, std::lock_guard<std::mutex> & cache_lock)
 {
     FileSegments segments;
     std::map<unsigned long, size_t> files;
@@ -74,10 +123,15 @@ FileSegments RemoteFileCache::getImpl(const Key & key, size_t offset, size_t)
         }
         for (auto [file_offset, file_size] : files)
         {
-            if ((file_offset <= offset) && (file_offset + file_size > offset))
+            auto left = file_offset;
+            auto right = file_offset + file_size - 1;
+            ///   |---------------------------------|
+            /// |--1---|    |--2--|              |-----2-----|
+            /// |-----------------1--------------------|
+            if (((left <= offset) && (right >= offset)) || ((left >= offset) && (left < (offset + size))))
             {
                 auto file_segment = std::make_shared<FileSegment>(file_offset, file_size, key, this, FileSegment::State::DOWNLOADED);
-                appendCacheLogEntry(key, file_offset);
+                appendCacheLogEntry(key, file_offset, file_size, cache_lock);
                 segments.emplace_back(file_segment);
             }
         }
@@ -85,8 +139,8 @@ FileSegments RemoteFileCache::getImpl(const Key & key, size_t offset, size_t)
     return segments;
 }
 
-FileSegments
-RemoteFileCache::splitRangeIntoCells(const Key & key, size_t offset, size_t size, FileSegment::State, std::lock_guard<std::mutex> &)
+FileSegments RemoteFileCache::splitRangeIntoCells(
+    const Key & key, size_t offset, size_t size, FileSegment::State, std::lock_guard<std::mutex> & cache_lock)
 {
     assert(size > 0);
 
@@ -107,7 +161,7 @@ RemoteFileCache::splitRangeIntoCells(const Key & key, size_t offset, size_t size
         remaining_size -= current_cell_size;
 
         auto file_segment = std::make_shared<FileSegment>(current_pos, current_cell_size, key, this, FileSegment::State::EMPTY);
-        appendCacheLogEntry(key, current_pos);
+        appendCacheLogEntry(key, current_pos, current_cell_size, cache_lock);
         file_segments.push_back(file_segment);
         current_pos += current_cell_size;
     }
@@ -172,7 +226,7 @@ void RemoteFileCache::fillHolesWithEmptyFileSegments(
         if (fill_with_detached_file_segments)
         {
             auto file_segment = std::make_shared<FileSegment>(current_pos, hole_size, key, this, FileSegment::State::EMPTY);
-            appendCacheLogEntry(key, current_pos);
+            appendCacheLogEntry(key, current_pos, hole_size, cache_lock);
             {
                 std::lock_guard segment_lock(file_segment->mutex);
                 file_segment->markAsDetached(segment_lock);
@@ -200,7 +254,7 @@ void RemoteFileCache::fillHolesWithEmptyFileSegments(
         if (fill_with_detached_file_segments)
         {
             auto file_segment = std::make_shared<FileSegment>(current_pos, hole_size, key, this, FileSegment::State::EMPTY);
-            appendCacheLogEntry(key, current_pos);
+            appendCacheLogEntry(key, current_pos, hole_size, cache_lock);
             {
                 std::lock_guard segment_lock(file_segment->mutex);
                 file_segment->markAsDetached(segment_lock);
@@ -221,7 +275,7 @@ FileSegmentsHolder RemoteFileCache::getOrSet(const Key & key, size_t offset, siz
 
     std::lock_guard cache_lock(mutex);
 
-    FileSegments file_segments = getImpl(key, offset, size);
+    FileSegments file_segments = getImpl(key, offset, size, cache_lock);
 
     if (file_segments.empty())
     {
@@ -230,6 +284,9 @@ FileSegmentsHolder RemoteFileCache::getOrSet(const Key & key, size_t offset, siz
     else
     {
         fillHolesWithEmptyFileSegments(file_segments, key, range, false, cache_lock);
+    }
+    {
+        outputCacheLogIfNeeded(cache_lock);
     }
     return FileSegmentsHolder(std::move(file_segments));
 }
@@ -282,6 +339,11 @@ bool RemoteFileCache::isLastFileSegmentHolder(const Key &, size_t, std::lock_gua
 }
 
 void RemoteFileCache::reduceSizeToDownloaded(const Key &, size_t, std::lock_guard<std::mutex> &, std::lock_guard<std::mutex> &)
+{
+}
+
+RemoteFileCache::CacheLogEntry::CacheLogEntry(const Key & key_, size_t offset_, size_t size_)
+    : key(key_), offset(offset_), size(size_), used_time(time_in_microseconds(std::chrono::system_clock::now()))
 {
 }
 

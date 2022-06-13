@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <unordered_map>
 #include <Common/FileCache.h>
 #include <Common/logger_useful.h>
@@ -46,7 +47,7 @@ private:
     void reduceSizeToDownloaded(
         const Key & key, size_t offset, std::lock_guard<std::mutex> & cache_lock, std::lock_guard<std::mutex> & segment_lock) override;
 
-    FileSegments getImpl(const Key & key, size_t offset, size_t size);
+    FileSegments getImpl(const Key & key, size_t offset, size_t size, std::lock_guard<std::mutex> & cache_lock);
 
     FileSegments
     splitRangeIntoCells(const Key & key, size_t offset, size_t size, FileSegment::State state, std::lock_guard<std::mutex> & cache_lock);
@@ -58,28 +59,33 @@ private:
         bool fill_with_detached_file_segments,
         std::lock_guard<std::mutex> & cache_lock);
 
-    void appendCacheLogEntry(const Key & key, size_t offset);
+    String getCacheLogPath();
+
+    void appendCacheLogEntry(const Key & key, size_t offset, size_t size, std::lock_guard<std::mutex> & cache_lock);
+
+    void outputCacheLogIfNeeded(std::lock_guard<std::mutex> & cache_lock);
+
+    void dumpCacheLog();
 
 private:
     Poco::Logger * log;
 
-    struct CacheTraceEntry
+    /// Future feature : query weight
+    /// 1.frequency = hits / (2 ^ 16)
+    /// 2.timestamp = lastusedtime / (2 ^ 8)
+    struct CacheLogEntry
     {
-        UInt64 hits = 0;
-        UInt64 last_used_time = 0;
-        /// future feature : query weight
+        Key key;
+        size_t offset;
+        size_t size;
+        UInt64 used_time;
 
-        /// 1.frequency = hits / (2 ^ 16)
-        /// 2.timestamp = lastusedtime / (2 ^ 8)
-        double frequency = 0;
-        double timestamp = 0;
-
-        void update() { }
+        CacheLogEntry(const Key & key_, size_t offset_, size_t size_);
     };
 
-    using CacheTrace = std::unordered_map<AccessKeyAndOffset, std::shared_ptr<CacheTraceEntry>, KeyAndOffsetHash>;
+    using CacheLog = std::vector<CacheLogEntry>;
 
-    CacheTrace trace;
+    CacheLog cache_log;
 };
 
 };
