@@ -28,6 +28,7 @@ class FileSegment : boost::noncopyable
 {
 
 friend class LRUFileCache;
+friend class RemoteFileCache;
 friend struct FileSegmentsHolder;
 friend class FileSegmentRangeWriter;
 
