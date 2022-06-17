@@ -109,6 +109,7 @@ void RemoteFileCache::dumpCacheLog()
 FileSegments RemoteFileCache::getImpl(const Key & key, size_t offset, size_t size, std::lock_guard<std::mutex> & cache_lock)
 {
     FileSegments segments;
+    /// sort with offset
     std::map<unsigned long, size_t> files;
     auto cache_path = getPathInLocalCache(key);
 
@@ -130,6 +131,7 @@ FileSegments RemoteFileCache::getImpl(const Key & key, size_t offset, size_t siz
             /// |-----------------1--------------------|
             if (((left <= offset) && (right >= offset)) || ((left >= offset) && (left < (offset + size))))
             {
+                LOG_INFO(log, "getImpl [key:{}][range({},{})][OK]", keyToStr(key), left, right);
                 auto file_segment = std::make_shared<FileSegment>(file_offset, file_size, key, this, FileSegment::State::DOWNLOADED);
                 appendCacheLogEntry(key, file_offset, file_size, cache_lock);
                 segments.emplace_back(file_segment);
@@ -144,9 +146,9 @@ FileSegments RemoteFileCache::splitRangeIntoCells(
 {
     assert(size > 0);
 
-    auto key_path = getPathInLocalCache(key);
-    if (!fs::exists(key_path))
-        fs::create_directories(key_path);
+    /// auto key_path = getPathInLocalCache(key);
+    /// if (!fs::exists(key_path))
+    ///     fs::create_directories(key_path);
 
     auto current_pos = offset;
     auto end_pos_non_included = offset + size;
@@ -160,7 +162,7 @@ FileSegments RemoteFileCache::splitRangeIntoCells(
         current_cell_size = std::min(remaining_size, max_file_segment_size);
         remaining_size -= current_cell_size;
 
-        auto file_segment = std::make_shared<FileSegment>(current_pos, current_cell_size, key, this, FileSegment::State::EMPTY);
+        auto file_segment = std::make_shared<FileSegment>(current_pos, current_cell_size, key, this, FileSegment::State::SKIP_CACHE);
         appendCacheLogEntry(key, current_pos, current_cell_size, cache_lock);
         file_segments.push_back(file_segment);
         current_pos += current_cell_size;
@@ -177,9 +179,9 @@ void RemoteFileCache::fillHolesWithEmptyFileSegments(
     bool fill_with_detached_file_segments,
     std::lock_guard<std::mutex> & cache_lock)
 {
-    auto key_path = getPathInLocalCache(key);
-    if (!fs::exists(key_path))
-        fs::create_directories(key_path);
+    /// auto key_path = getPathInLocalCache(key);
+    /// if (!fs::exists(key_path))
+    ///     fs::create_directories(key_path);
 
     /// There are segments [segment1, ..., segmentN]
     /// (non-overlapping, non-empty, ascending-ordered) which (maybe partially)
@@ -225,7 +227,7 @@ void RemoteFileCache::fillHolesWithEmptyFileSegments(
 
         if (fill_with_detached_file_segments)
         {
-            auto file_segment = std::make_shared<FileSegment>(current_pos, hole_size, key, this, FileSegment::State::EMPTY);
+            auto file_segment = std::make_shared<FileSegment>(current_pos, hole_size, key, this, FileSegment::State::SKIP_CACHE);
             appendCacheLogEntry(key, current_pos, hole_size, cache_lock);
             {
                 std::lock_guard segment_lock(file_segment->mutex);
@@ -235,7 +237,7 @@ void RemoteFileCache::fillHolesWithEmptyFileSegments(
         }
         else
         {
-            file_segments.splice(it, splitRangeIntoCells(key, current_pos, hole_size, FileSegment::State::EMPTY, cache_lock));
+            file_segments.splice(it, splitRangeIntoCells(key, current_pos, hole_size, FileSegment::State::SKIP_CACHE, cache_lock));
         }
 
         current_pos = segment_range.right + 1;
@@ -253,7 +255,7 @@ void RemoteFileCache::fillHolesWithEmptyFileSegments(
 
         if (fill_with_detached_file_segments)
         {
-            auto file_segment = std::make_shared<FileSegment>(current_pos, hole_size, key, this, FileSegment::State::EMPTY);
+            auto file_segment = std::make_shared<FileSegment>(current_pos, hole_size, key, this, FileSegment::State::SKIP_CACHE);
             appendCacheLogEntry(key, current_pos, hole_size, cache_lock);
             {
                 std::lock_guard segment_lock(file_segment->mutex);
@@ -264,7 +266,7 @@ void RemoteFileCache::fillHolesWithEmptyFileSegments(
         else
         {
             file_segments.splice(
-                file_segments.end(), splitRangeIntoCells(key, current_pos, hole_size, FileSegment::State::EMPTY, cache_lock));
+                file_segments.end(), splitRangeIntoCells(key, current_pos, hole_size, FileSegment::State::SKIP_CACHE, cache_lock));
         }
     }
 }
@@ -279,7 +281,7 @@ FileSegmentsHolder RemoteFileCache::getOrSet(const Key & key, size_t offset, siz
 
     if (file_segments.empty())
     {
-        file_segments = splitRangeIntoCells(key, offset, size, FileSegment::State::EMPTY, cache_lock);
+        file_segments = splitRangeIntoCells(key, offset, size, FileSegment::State::SKIP_CACHE, cache_lock);
     }
     else
     {
