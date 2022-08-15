@@ -280,3 +280,6 @@
 [submodule "contrib/c-ares"]
 	path = contrib/c-ares
 	url = https://github.com/ClickHouse/c-ares
+[submodule "contrib/MQCacheConnector"]
+	path = contrib/MQCacheConnector
+	url = https://github.com/KinderRiven/MQCacheConnector

@@ -1,34 +1,35 @@
 #include <Common/config.h>
 
-#include <Common/logger_useful.h>
+#include <Disks/DiskFactory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
-#include <Disks/DiskFactory.h>
+#include <Common/logger_useful.h>
 
 #if USE_AWS_S3
 
-#include <aws/core/client/DefaultRetryStrategy.h>
+#    include <aws/core/client/DefaultRetryStrategy.h>
 
-#include <base/getFQDNOrHostName.h>
+#    include <base/getFQDNOrHostName.h>
 
-#include <Common/FileCacheFactory.h>
+#    include <Common/FileCacheFactory.h>
 
-#include <IO/S3Common.h>
+#    include <IO/S3Common.h>
 
-#include <Disks/DiskCacheWrapper.h>
-#include <Disks/DiskRestartProxy.h>
-#include <Disks/DiskLocal.h>
-#include <Disks/ObjectStorages/DiskObjectStorage.h>
-#include <Disks/ObjectStorages/DiskObjectStorageCommon.h>
-#include <Disks/ObjectStorages/S3/ProxyConfiguration.h>
-#include <Disks/ObjectStorages/S3/ProxyListConfiguration.h>
-#include <Disks/ObjectStorages/S3/ProxyResolverConfiguration.h>
-#include <Disks/ObjectStorages/S3/S3ObjectStorage.h>
-#include <Disks/ObjectStorages/S3/diskSettings.h>
-#include <Disks/ObjectStorages/MetadataStorageFromDisk.h>
+#    include <Disks/DiskCacheWrapper.h>
+#    include <Disks/DiskLocal.h>
+#    include <Disks/DiskRestartProxy.h>
+#    include <Disks/ObjectStorages/DiskObjectStorage.h>
+#    include <Disks/ObjectStorages/DiskObjectStorageCommon.h>
+#    include <Disks/ObjectStorages/MQStorage/MQStorage.h>
+#    include <Disks/ObjectStorages/MetadataStorageFromDisk.h>
+#    include <Disks/ObjectStorages/S3/ProxyConfiguration.h>
+#    include <Disks/ObjectStorages/S3/ProxyListConfiguration.h>
+#    include <Disks/ObjectStorages/S3/ProxyResolverConfiguration.h>
+#    include <Disks/ObjectStorages/S3/S3ObjectStorage.h>
+#    include <Disks/ObjectStorages/S3/diskSettings.h>
 
-#include <Storages/StorageS3Settings.h>
+#    include <Storages/StorageS3Settings.h>
 
 
 namespace DB
@@ -43,74 +44,115 @@ namespace ErrorCodes
 namespace
 {
 
-void checkWriteAccess(IDisk & disk)
-{
-    auto file = disk.writeFile("test_acl", DBMS_DEFAULT_BUFFER_SIZE, WriteMode::Rewrite);
-    try
+    void checkWriteAccess(IDisk & disk)
     {
-        file->write("test", 4);
-    }
-    catch (...)
-    {
-        /// Log current exception, because finalize() can throw a different exception.
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-        file->finalize();
-        throw;
-    }
-}
-
-void checkReadAccess(const String & disk_name, IDisk & disk)
-{
-    auto file = disk.readFile("test_acl");
-    String buf(4, '0');
-    file->readStrict(buf.data(), 4);
-    if (buf != "test")
-        throw Exception("No read access to S3 bucket in disk " + disk_name, ErrorCodes::PATH_ACCESS_DENIED);
-}
-
-void checkRemoveAccess(IDisk & disk)
-{
-    disk.removeFile("test_acl");
-}
-
-bool checkBatchRemoveIsMissing(S3ObjectStorage & storage, const String & key_with_trailing_slash)
-{
-    StoredObject object(key_with_trailing_slash + "_test_remove_objects_capability");
-    try
-    {
-        auto file = storage.writeObject(object, WriteMode::Rewrite);
-        file->write("test", 4);
-        file->finalize();
-    }
-    catch (...)
-    {
+        auto file = disk.writeFile("test_acl", DBMS_DEFAULT_BUFFER_SIZE, WriteMode::Rewrite);
         try
         {
-            storage.removeObject(object);
+            file->write("test", 4);
         }
         catch (...)
         {
+            /// Log current exception, because finalize() can throw a different exception.
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            file->finalize();
+            throw;
         }
-        return false; /// We don't have write access, therefore no information about batch remove.
     }
-    try
+
+    void checkReadAccess(const String & disk_name, IDisk & disk)
     {
-        /// Uses `DeleteObjects` request (batch delete).
-        storage.removeObjects({object});
-        return false;
+        auto file = disk.readFile("test_acl");
+        String buf(4, '0');
+        file->readStrict(buf.data(), 4);
+        if (buf != "test")
+            throw Exception("No read access to S3 bucket in disk " + disk_name, ErrorCodes::PATH_ACCESS_DENIED);
     }
-    catch (const Exception &)
+
+    void checkRemoveAccess(IDisk & disk)
     {
+        disk.removeFile("test_acl");
+    }
+
+#    if 0
+    bool checkBatchRemoveIsMissing(S3ObjectStorage & storage, const String & key_with_trailing_slash)
+    {
+        StoredObject object(key_with_trailing_slash + "_test_remove_objects_capability");
         try
         {
-            storage.removeObject(object);
+            auto file = storage.writeObject(object, WriteMode::Rewrite);
+            file->write("test", 4);
+            file->finalize();
         }
         catch (...)
         {
+            try
+            {
+                storage.removeObject(object);
+            }
+            catch (...)
+            {
+            }
+            return false; /// We don't have write access, therefore no information about batch remove.
         }
-        return true;
+        try
+        {
+            /// Uses `DeleteObjects` request (batch delete).
+            storage.removeObjects({object});
+            return false;
+        }
+        catch (const Exception &)
+        {
+            try
+            {
+                storage.removeObject(object);
+            }
+            catch (...)
+            {
+            }
+            return true;
+        }
     }
-}
+#    endif
+
+    bool checkBatchRemoveIsMissing(MQStorage & storage, const String & key_with_trailing_slash)
+    {
+        StoredObject object(key_with_trailing_slash + "_test_remove_objects_capability");
+        try
+        {
+            auto file = storage.writeObject(object, WriteMode::Rewrite);
+            file->write("test", 4);
+            file->finalize();
+        }
+        catch (...)
+        {
+            try
+            {
+                storage.removeObject(object);
+            }
+            catch (...)
+            {
+            }
+            return false; /// We don't have write access, therefore no information about batch remove.
+        }
+        try
+        {
+            /// Uses `DeleteObjects` request (batch delete).
+            storage.removeObjects({object});
+            return false;
+        }
+        catch (const Exception &)
+        {
+            try
+            {
+                storage.removeObject(object);
+            }
+            catch (...)
+            {
+            }
+            return true;
+        }
+    }
 
 }
 
@@ -120,7 +162,8 @@ void registerDiskS3(DiskFactory & factory)
                       const Poco::Util::AbstractConfiguration & config,
                       const String & config_prefix,
                       ContextPtr context,
-                      const DisksMap & /*map*/) -> DiskPtr {
+                      const DisksMap & /*map*/) -> DiskPtr
+    {
         S3::URI uri(Poco::URI(config.getString(config_prefix + ".endpoint")));
 
         if (uri.key.empty())
@@ -136,10 +179,20 @@ void registerDiskS3(DiskFactory & factory)
         FileCachePtr cache = getCachePtrForDisk(name, config, config_prefix, context);
         S3Capabilities s3_capabilities = getCapabilitiesFromConfig(config, config_prefix);
 
-        auto s3_storage = std::make_unique<S3ObjectStorage>(
+        auto s3_storage = std::make_unique<MQStorage>(
             getClient(config, config_prefix, context),
             getSettings(config, config_prefix, context),
-            uri.version_id, s3_capabilities, uri.bucket, cache);
+            uri.version_id,
+            s3_capabilities,
+            uri.bucket,
+            cache);
+
+#    if 0
+         acuto s3_storage = std::make_unique<S3ObjectStorage>(
+             getClient(config, config_prefix, context),
+             getSettings(config, config_prefix, context),
+             uri.version_id, s3_capabilities, uri.bucket, cache);
+#    endif
 
         bool skip_access_check = config.getBool(config_prefix + ".skip_access_check", false);
 
@@ -153,8 +206,7 @@ void registerDiskS3(DiskFactory & factory)
                     "Storage for disk {} does not support batch delete operations, "
                     "so `s3_capabilities.support_batch_delete` was automatically turned off during the access check. "
                     "To remove this message set `s3_capabilities.support_batch_delete` for the disk to `false`.",
-                    name
-                );
+                    name);
                 s3_storage->setCapabilitiesSupportBatchDelete(false);
             }
         }
@@ -184,13 +236,13 @@ void registerDiskS3(DiskFactory & factory)
 
         std::shared_ptr<IDisk> disk_result = s3disk;
 
-#ifdef NDEBUG
+#    ifdef NDEBUG
         bool use_cache = true;
-#else
+#    else
         /// Current S3 cache implementation lead to allocations in destructor of
         /// read buffer.
         bool use_cache = false;
-#endif
+#    endif
 
         if (config.getBool(config_prefix + ".cache_enabled", use_cache))
         {
@@ -207,6 +259,8 @@ void registerDiskS3(DiskFactory & factory)
 
 #else
 
-void registerDiskS3(DiskFactory &) {}
+void registerDiskS3(DiskFactory &)
+{
+}
 
 #endif
