@@ -379,6 +379,8 @@ dbms_target_link_libraries(PUBLIC ch_contrib::abseil_swiss_tables)
 # That way we we can redirect malloc/free functions avoiding circular dependencies
 dbms_target_link_libraries(PUBLIC ch_contrib::roaring)
 
+dbms_target_link_libraries(PUBLIC ch_contrib::mqcache)
+
 if (TARGET ch_contrib::rdkafka)
     dbms_target_link_libraries(PRIVATE ch_contrib::rdkafka ch_contrib::cppkafka)
 endif()
