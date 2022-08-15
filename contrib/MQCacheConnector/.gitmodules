@@ -1,0 +1,8 @@
+[submodule "third-party/brpc"]
+	path = third-party/brpc
+	url = https://github.com/apache/incubator-brpc
+	branch = release-1.1
+[submodule "third-party/protobuf"]
+	path = third-party/protobuf
+	url = https://github.com/protocolbuffers/protobuf
+	branch = 3.20.x

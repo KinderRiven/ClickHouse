@@ -14,8 +14,6 @@
 #include <Common/config.h>
 #include <Common/logger_useful.h>
 
-#include <HelloConnector.h>
-
 namespace DB
 {
 
@@ -31,9 +29,7 @@ public:
         FileCachePtr cache_)
         : s3_storage(
             std::make_unique<S3ObjectStorage>(std::move(client_), std::move(s3_settings_), version_id_, s3_capabilities_, bucket_, cache_))
-        , connector(std::make_shared<HelloConnector>())
     {
-        connector->echoHello();
         LOG_INFO(log, "Create MQStorage Succeeed!");
     }
 
@@ -102,7 +98,6 @@ public:
 
 private:
     std::unique_ptr<S3ObjectStorage> s3_storage;
-    std::shared_ptr<HelloConnector> connector;
     Poco::Logger * log = &Poco::Logger::get("MQStorage");
 };
 
