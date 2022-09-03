@@ -71,7 +71,7 @@ public:
      * As long as pointers to returned file segments are hold
      * it is guaranteed that these file segments are not removed from cache.
      */
-    FileSegmentsHolder getOrSet(const Key & key, size_t offset, size_t size, bool is_persistent);
+    FileSegmentsHolder getOrSet(const Key & key, size_t offset, size_t size, bool is_persistent, std::string remote_source_path = {});
 
     /**
      * Segments in returned list are ordered in ascending order and represent a full contiguous

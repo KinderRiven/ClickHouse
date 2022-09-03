@@ -4,6 +4,7 @@
 #include <Common/PODArray_fwd.h>
 #include <Common/Exception.h>
 #include <Common/typeid_cast.h>
+#include <Common/logger_useful.h>
 #include <base/StringRef.h>
 #include <Core/Types.h>
 
@@ -52,6 +53,9 @@ private:
     /// It performs shallow copy with copy-ctor and not useful from outside.
     /// If you want to copy column for modification, look at 'mutate' method.
     [[nodiscard]] virtual MutablePtr clone() const = 0;
+
+protected:
+    Poco::Logger * log = &Poco::Logger::get("IColumn");
 
 public:
     /// Name of a Column. It is used in info messages.

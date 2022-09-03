@@ -469,9 +469,11 @@ void FileCache::fillHolesWithEmptyFileSegments(
     }
 }
 
-FileSegmentsHolder FileCache::getOrSet(const Key & key, size_t offset, size_t size, bool is_persistent)
+FileSegmentsHolder FileCache::getOrSet(const Key & key, size_t offset, size_t size, bool is_persistent, std::string remote_source_path)
 {
     assertInitialized();
+
+    LOG_INFO(log, "{},{},{},{}", remote_source_path, key.toString(), offset, size);
 
     FileSegment::Range range(offset, offset + size - 1);
 

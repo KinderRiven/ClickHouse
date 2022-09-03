@@ -11,6 +11,7 @@
 #include <Common/memcmpSmall.h>
 #include <Common/assert_cast.h>
 #include <Core/Field.h>
+#include <Common/StackTrace.h>
 
 
 class Collator;
@@ -144,6 +145,9 @@ public:
 
     void insertFrom(const IColumn & src_, size_t n) override
     {
+        /// auto st = StackTrace().toString();
+        /// LOG_INFO(log, "insertFrom - {}", st);
+
         const ColumnString & src = assert_cast<const ColumnString &>(src_);
         const size_t size_to_append = src.offsets[n] - src.offsets[n - 1];  /// -1th index is Ok, see PaddedPODArray.
 

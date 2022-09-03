@@ -104,7 +104,7 @@ void CachedReadBufferFromRemoteFS::initialize(size_t offset, size_t size)
     }
     else
     {
-        file_segments_holder.emplace(cache->getOrSet(cache_key, offset, size, is_persistent));
+        file_segments_holder.emplace(cache->getOrSet(cache_key, offset, size, is_persistent, remote_fs_object_path));
     }
 
     /**
