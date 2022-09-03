@@ -530,6 +530,8 @@ if (TARGET ch_contrib::rocksdb)
     dbms_target_link_libraries(PUBLIC ch_contrib::rocksdb)
 endif()
 
+dbms_target_link_libraries(PUBLIC ch_contrib::mq_cache)
+
 if (TARGET ch_contrib::libpqxx)
     dbms_target_link_libraries(PUBLIC ch_contrib::libpqxx)
 endif()

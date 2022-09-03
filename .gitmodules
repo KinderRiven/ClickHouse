@@ -280,3 +280,14 @@
 [submodule "contrib/c-ares"]
 	path = contrib/c-ares
 	url = https://github.com/ClickHouse/c-ares
+[submodule "contrib/mq_cache"]
+	path = contrib/mq_cache
+	url = git@github.com:KinderRiven/MQCache.git
+[submodule "contrib/spdlog"]
+	path = contrib/spdlog
+	url = https://github.com/gabime/spdlog
+	branch = v1.x
+[submodule "contrib/pugixml"]
+	path = contrib/pugixml
+	url = https://github.com/zeux/pugixml
+	branch = master
