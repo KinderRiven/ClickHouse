@@ -4,6 +4,7 @@
 #include <IO/BoundedReadBuffer.h>
 #include <Disks/IO/CachedOnDiskWriteBufferFromFile.h>
 #include <Disks/IO/CachedOnDiskReadBufferFromFile.h>
+#include <Disks/IO/RemoteCachedOnDiskReadBufferFromFile.h>
 #include <Interpreters/Cache/FileCache.h>
 #include <Interpreters/Cache/FileCacheFactory.h>
 #include <Common/CurrentThread.h>
@@ -114,7 +115,7 @@ std::unique_ptr<ReadBufferFromFileBase> CachedObjectStorage::readObjects( /// NO
         std::string path = objects[0].absolute_path;
         FileCache::Key key = getCacheKey(objects[0].getPathKeyForCache());
 
-        return std::make_unique<CachedOnDiskReadBufferFromFile>(
+        return std::make_unique<RemoteCachedOnDiskReadBufferFromFile>(
             path,
             key,
             cache,
@@ -155,7 +156,7 @@ std::unique_ptr<ReadBufferFromFileBase> CachedObjectStorage::readObject( /// NOL
 
         FileCache::Key key = getCacheKey(object.getPathKeyForCache());
         LOG_TEST(log, "Reading from file `{}` with cache key `{}`", object.absolute_path, key.toString());
-        return std::make_unique<CachedOnDiskReadBufferFromFile>(
+        return std::make_unique<RemoteCachedOnDiskReadBufferFromFile>(
             object.absolute_path,
             key,
             cache,
