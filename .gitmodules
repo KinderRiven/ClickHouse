@@ -291,3 +291,7 @@
 	path = contrib/pugixml
 	url = https://github.com/zeux/pugixml
 	branch = master
+[submodule "contrib/json"]
+	path = contrib/json
+	url = https://github.com/nlohmann/json
+	branch = release/3.10.5
