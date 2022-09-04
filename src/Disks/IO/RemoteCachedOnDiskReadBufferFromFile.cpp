@@ -40,6 +40,7 @@ RemoteCachedOnDiskReadBufferFromFile::RemoteCachedOnDiskReadBufferFromFile(
     const String & source_file_path_,
     const FileCache::Key & cache_key_,
     FileCachePtr cache_,
+    std::shared_ptr<mq_cache::MQCacheConnector> connector_,
     ImplementationBufferCreator implementation_buffer_creator_,
     const ReadSettings & settings_,
     const String & query_id_,
@@ -56,6 +57,7 @@ RemoteCachedOnDiskReadBufferFromFile::RemoteCachedOnDiskReadBufferFromFile(
     , cache_key(cache_key_)
     , source_file_path(source_file_path_)
     , cache(cache_)
+    , connector(connector_)
     , settings(settings_)
     , read_until_position(read_until_position_ ? *read_until_position_ : file_size_)
     , implementation_buffer_creator(implementation_buffer_creator_)
@@ -110,6 +112,13 @@ void RemoteCachedOnDiskReadBufferFromFile::initialize(size_t offset, size_t size
     if (initialized)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Caching buffer already initialized");
 
+    if (connector)
+    {
+        std::string endpoint = "aws-s3";
+        std::string source_path = source_file_path;
+        connector->queryObject(endpoint, source_path, offset, size);
+    }
+
     LOG_INFO(log, "[source_path:{}][offset:{}][size:{}]", source_file_path, offset, size);
     implementation_buffer.reset();
 
@@ -135,7 +144,6 @@ void RemoteCachedOnDiskReadBufferFromFile::initialize(size_t offset, size_t size
         file_segments_holder->file_segments.size(), file_segments_holder->toString(), file_offset_of_buffer_end);
 
     current_file_segment_it = file_segments_holder->file_segments.begin();
-
     initialized = true;
 }
 

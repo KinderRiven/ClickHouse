@@ -126,15 +126,6 @@ std::unique_ptr<ReadBufferFromFileBase> S3ObjectStorage::readObjects( /// NOLINT
 
     ReadSettings disk_read_settings = patchSettings(read_settings);
     auto settings_ptr = s3_settings.get();
-    for (const auto & object : objects)
-    {
-        std::string endpoint = bucket;
-        std::string source_path = object.absolute_path;
-        uint64_t offset = 0;
-        uint64_t size = object.bytes_size;
-        connector->queryObject(endpoint, source_path, offset, size);
-    }
-
     auto read_buffer_creator =
         [this, settings_ptr, disk_read_settings]
         (const std::string & path, size_t read_until_position) -> std::shared_ptr<ReadBufferFromFileBase>
@@ -176,13 +167,6 @@ std::unique_ptr<ReadBufferFromFileBase> S3ObjectStorage::readObject( /// NOLINT
     std::optional<size_t>) const
 {
     auto settings_ptr = s3_settings.get();
-    {
-        std::string endpoint = bucket;
-        std::string source_path = object.absolute_path;
-        uint64_t offset = 0;
-        uint64_t size = object.bytes_size;
-        connector->queryObject(endpoint, source_path, offset, size);
-    }
     return std::make_unique<ReadBufferFromS3>(
         client.get(),
         bucket,

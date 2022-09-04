@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Connector/Connector.h>
 #include <Disks/ObjectStorages/IObjectStorage.h>
 #include <Interpreters/Cache/FileCache.h>
 #include <Interpreters/Cache/FileCacheSettings.h>
@@ -123,6 +124,7 @@ private:
     FileCacheSettings cache_settings;
     std::string cache_config_name;
     Poco::Logger * log;
+    std::shared_ptr<mq_cache::MQCacheConnector> remote_cache_connector;
 };
 
 }

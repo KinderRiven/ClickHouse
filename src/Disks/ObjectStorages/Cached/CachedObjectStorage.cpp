@@ -33,6 +33,8 @@ CachedObjectStorage::CachedObjectStorage(
     , log(&Poco::Logger::get(getName()))
 {
     cache->initialize();
+    remote_cache_connector = std::make_shared<mq_cache::MQCacheConnector>();
+    remote_cache_connector->sayHello();
 }
 
 DataSourceDescription CachedObjectStorage::getDataSourceDescription() const
@@ -95,7 +97,34 @@ std::unique_ptr<ReadBufferFromFileBase> CachedObjectStorage::readObjects( /// NO
     auto implementation_buffer = object_storage->readObjects(objects, modified_read_settings, read_hint, file_size);
 
     /// If underlying read buffer does caching on its own, do not wrap it in caching buffer.
-    if (implementation_buffer->isIntegratedWithFilesystemCache()
+    if (modified_read_settings.enable_remote_cache)
+    {
+        if (!file_size)
+            file_size = implementation_buffer->getFileSize();
+
+        auto implementation_buffer_creator = [objects, modified_read_settings, read_hint, file_size, this]()
+        {
+            return std::make_unique<BoundedReadBuffer>(
+                object_storage->readObjects(objects, modified_read_settings, read_hint, file_size));
+        };
+
+        /// TODO: A test is needed for the case of non-s3 storage and *Log family engines.
+        std::string path = objects[0].absolute_path;
+        FileCache::Key key = getCacheKey(objects[0].getPathKeyForCache());
+
+        return std::make_unique<RemoteCachedOnDiskReadBufferFromFile>(
+            path,
+            key,
+            cache,
+            remote_cache_connector,
+            implementation_buffer_creator,
+            modified_read_settings,
+            CurrentThread::isInitialized() && CurrentThread::get().getQueryContext() ? std::string(CurrentThread::getQueryId()) : "",
+            file_size.value(),
+            /* allow_seeks */true,
+            /* use_external_buffer */false);
+    }
+    else if (implementation_buffer->isIntegratedWithFilesystemCache()
         && modified_read_settings.enable_filesystem_cache_on_lower_level)
     {
         return implementation_buffer;
@@ -115,7 +144,7 @@ std::unique_ptr<ReadBufferFromFileBase> CachedObjectStorage::readObjects( /// NO
         std::string path = objects[0].absolute_path;
         FileCache::Key key = getCacheKey(objects[0].getPathKeyForCache());
 
-        return std::make_unique<RemoteCachedOnDiskReadBufferFromFile>(
+        return std::make_unique<CachedOnDiskReadBufferFromFile>(
             path,
             key,
             cache,
@@ -139,7 +168,31 @@ std::unique_ptr<ReadBufferFromFileBase> CachedObjectStorage::readObject( /// NOL
     auto implementation_buffer = object_storage->readObject(object, read_settings, read_hint, file_size);
 
     /// If underlying read buffer does caching on its own, do not wrap it in caching buffer.
-    if (implementation_buffer->isIntegratedWithFilesystemCache()
+    if (modified_read_settings.enable_remote_cache)
+    {
+        if (!file_size)
+            file_size = implementation_buffer->getFileSize();
+
+        auto implementation_buffer_creator = [object, read_settings, read_hint, file_size, this]()
+        {
+            return std::make_unique<BoundedReadBuffer>(object_storage->readObject(object, read_settings, read_hint, file_size));
+        };
+
+        FileCache::Key key = getCacheKey(object.getPathKeyForCache());
+        LOG_TEST(log, "Reading from file `{}` with cache key `{}`", object.absolute_path, key.toString());
+        return std::make_unique<RemoteCachedOnDiskReadBufferFromFile>(
+            object.absolute_path,
+            key,
+            cache,
+            remote_cache_connector,
+            implementation_buffer_creator,
+            read_settings,
+            CurrentThread::isInitialized() && CurrentThread::get().getQueryContext() ? std::string(CurrentThread::getQueryId()) : "",
+            file_size.value(),
+            /* allow_seeks */true,
+            /* use_external_buffer */false);
+    }
+    else if (implementation_buffer->isIntegratedWithFilesystemCache()
         && modified_read_settings.enable_filesystem_cache_on_lower_level)
     {
         return implementation_buffer;
@@ -156,7 +209,7 @@ std::unique_ptr<ReadBufferFromFileBase> CachedObjectStorage::readObject( /// NOL
 
         FileCache::Key key = getCacheKey(object.getPathKeyForCache());
         LOG_TEST(log, "Reading from file `{}` with cache key `{}`", object.absolute_path, key.toString());
-        return std::make_unique<RemoteCachedOnDiskReadBufferFromFile>(
+        return std::make_unique<CachedOnDiskReadBufferFromFile>(
             object.absolute_path,
             key,
             cache,

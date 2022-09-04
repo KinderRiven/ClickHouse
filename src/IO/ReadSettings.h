@@ -87,6 +87,7 @@ struct ReadSettings
     /// (instead of caching the result outside of threadpool). By default, if they support it,
     /// they will do it. But this behaviour can be changed with this setting.
     bool enable_filesystem_cache_on_lower_level = true;
+    bool enable_remote_cache = true;
 
     size_t max_query_cache_size = (128UL * 1024 * 1024 * 1024);
     bool skip_download_if_exceeds_query_cache = true;

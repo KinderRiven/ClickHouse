@@ -8,6 +8,7 @@
 #include <IO/ReadBufferFromFileBase.h>
 #include <Interpreters/FilesystemCacheLog.h>
 #include <Interpreters/Cache/FileSegment.h>
+#include <Connector/Connector.h>
 
 
 namespace CurrentMetrics
@@ -28,6 +29,7 @@ public:
         const String & source_file_path_,
         const FileCache::Key & cache_key_,
         FileCachePtr cache_,
+        std::shared_ptr<mq_cache::MQCacheConnector> connector_,
         ImplementationBufferCreator implementation_buffer_creator_,
         const ReadSettings & settings_,
         const String & query_id_,
@@ -95,6 +97,7 @@ private:
     String source_file_path;
 
     FileCachePtr cache;
+    std::shared_ptr<mq_cache::MQCacheConnector> connector;
     ReadSettings settings;
 
     size_t read_until_position;
