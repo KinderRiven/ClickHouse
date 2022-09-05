@@ -12,6 +12,7 @@
 #include <aws/s3/model/ListObjectsV2Result.h>
 #include <Storages/StorageS3Settings.h>
 #include <Common/MultiVersion.h>
+#include <Connector/Connector.h>
 
 namespace DB
 {
@@ -59,6 +60,9 @@ public:
         data_source_description.description = connection_string;
         data_source_description.is_cached = false;
         data_source_description.is_encrypted = false;
+
+        remote_cache_connector = std::make_shared<mq_cache::MQCacheConnector>();
+        remote_cache_connector->sayHello();
     }
 
     DataSourceDescription getDataSourceDescription() const override
@@ -180,6 +184,7 @@ private:
     const String version_id;
 
     DataSourceDescription data_source_description;
+    std::shared_ptr<mq_cache::MQCacheConnector> remote_cache_connector;
 };
 
 }

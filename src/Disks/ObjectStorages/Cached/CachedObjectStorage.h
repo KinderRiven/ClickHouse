@@ -124,6 +124,7 @@ private:
     FileCacheSettings cache_settings;
     std::string cache_config_name;
     Poco::Logger * log;
+
     std::shared_ptr<mq_cache::MQCacheConnector> remote_cache_connector;
 };
 

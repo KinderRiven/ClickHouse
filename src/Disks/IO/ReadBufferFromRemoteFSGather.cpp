@@ -3,6 +3,7 @@
 #include <IO/SeekableReadBuffer.h>
 
 #include <Disks/IO/CachedOnDiskReadBufferFromFile.h>
+#include <Disks/IO/RemoteCachedOnDiskReadBufferFromFile.h>
 #include <Common/logger_useful.h>
 #include <iostream>
 #include <Common/hex.h>
@@ -21,7 +22,8 @@ namespace ErrorCodes
 ReadBufferFromRemoteFSGather::ReadBufferFromRemoteFSGather(
     ReadBufferCreator && read_buffer_creator_,
     const StoredObjects & blobs_to_read_,
-    const ReadSettings & settings_)
+    const ReadSettings & settings_,
+    std::shared_ptr<mq_cache::MQCacheConnector> connector_)
     : ReadBuffer(nullptr, 0)
     , read_buffer_creator(std::move(read_buffer_creator_))
     , blobs_to_read(blobs_to_read_)
@@ -29,6 +31,7 @@ ReadBufferFromRemoteFSGather::ReadBufferFromRemoteFSGather(
     , query_id(CurrentThread::isInitialized() && CurrentThread::get().getQueryContext() != nullptr ? CurrentThread::getQueryId() : "")
     , log(&Poco::Logger::get("ReadBufferFromRemoteFSGather"))
     , enable_cache_log(!query_id.empty() && settings.enable_filesystem_cache_log)
+    , connector(connector_)
 {
     if (blobs_to_read.empty())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Attempt to read zero number of objects");
@@ -55,17 +58,35 @@ SeekableReadBufferPtr ReadBufferFromRemoteFSGather::createImplementationBuffer(c
     if (with_cache)
     {
         auto cache_key = settings.remote_fs_cache->hash(path);
-        return std::make_shared<CachedOnDiskReadBufferFromFile>(
-            path,
-            cache_key,
-            settings.remote_fs_cache,
-            std::move(current_read_buffer_creator),
-            settings,
-            query_id,
-            file_size,
-            /* allow_seeks */false,
-            /* use_external_buffer */true,
-            read_until_position ? std::optional<size_t>(read_until_position) : std::nullopt);
+        if (settings.enable_remote_cache && connector)
+        {
+            return std::make_shared<RemoteCachedOnDiskReadBufferFromFile>(
+                path,
+                cache_key,
+                settings.remote_fs_cache,
+                connector,
+                std::move(current_read_buffer_creator),
+                settings,
+                query_id,
+                file_size,
+                /* allow_seeks */false,
+                /* use_external_buffer */true,
+                read_until_position ? std::optional<size_t>(read_until_position) : std::nullopt);
+        }
+        else
+        {
+            return std::make_shared<CachedOnDiskReadBufferFromFile>(
+                path,
+                cache_key,
+                settings.remote_fs_cache,
+                std::move(current_read_buffer_creator),
+                settings,
+                query_id,
+                file_size,
+                /* allow_seeks */false,
+                /* use_external_buffer */true,
+                read_until_position ? std::optional<size_t>(read_until_position) : std::nullopt);
+        }
     }
 
     return current_read_buffer_creator();

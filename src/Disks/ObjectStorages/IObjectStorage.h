@@ -19,7 +19,6 @@
 #include <Common/ThreadPool.h>
 #include <Disks/WriteMode.h>
 
-
 namespace DB
 {
 

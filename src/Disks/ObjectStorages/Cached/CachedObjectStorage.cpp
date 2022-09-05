@@ -97,7 +97,12 @@ std::unique_ptr<ReadBufferFromFileBase> CachedObjectStorage::readObjects( /// NO
     auto implementation_buffer = object_storage->readObjects(objects, modified_read_settings, read_hint, file_size);
 
     /// If underlying read buffer does caching on its own, do not wrap it in caching buffer.
-    if (modified_read_settings.enable_remote_cache)
+    if (implementation_buffer->isIntegratedWithFilesystemCache()
+        && modified_read_settings.enable_filesystem_cache_on_lower_level)
+    {
+        return implementation_buffer;
+    }
+    else if (modified_read_settings.enable_remote_cache)
     {
         if (!file_size)
             file_size = implementation_buffer->getFileSize();
@@ -123,11 +128,6 @@ std::unique_ptr<ReadBufferFromFileBase> CachedObjectStorage::readObjects( /// NO
             file_size.value(),
             /* allow_seeks */true,
             /* use_external_buffer */false);
-    }
-    else if (implementation_buffer->isIntegratedWithFilesystemCache()
-        && modified_read_settings.enable_filesystem_cache_on_lower_level)
-    {
-        return implementation_buffer;
     }
     else
     {
@@ -168,7 +168,12 @@ std::unique_ptr<ReadBufferFromFileBase> CachedObjectStorage::readObject( /// NOL
     auto implementation_buffer = object_storage->readObject(object, read_settings, read_hint, file_size);
 
     /// If underlying read buffer does caching on its own, do not wrap it in caching buffer.
-    if (modified_read_settings.enable_remote_cache)
+    if (implementation_buffer->isIntegratedWithFilesystemCache()
+        && modified_read_settings.enable_filesystem_cache_on_lower_level)
+    {
+        return implementation_buffer;
+    }
+    else if (modified_read_settings.enable_remote_cache)
     {
         if (!file_size)
             file_size = implementation_buffer->getFileSize();
@@ -192,12 +197,7 @@ std::unique_ptr<ReadBufferFromFileBase> CachedObjectStorage::readObject( /// NOL
             /* allow_seeks */true,
             /* use_external_buffer */false);
     }
-    else if (implementation_buffer->isIntegratedWithFilesystemCache()
-        && modified_read_settings.enable_filesystem_cache_on_lower_level)
-    {
-        return implementation_buffer;
-    }
-    else
+    else 
     {
         if (!file_size)
             file_size = implementation_buffer->getFileSize();

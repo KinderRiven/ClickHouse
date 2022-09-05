@@ -72,6 +72,10 @@ RemoteCachedOnDiskReadBufferFromFile::RemoteCachedOnDiskReadBufferFromFile(
     bytes_to_predownload = 0;
     first_offset = 0;
     allow_seeks_after_first_read = true;
+
+    remote_file_reader = implementation_buffer_creator();
+    swap(*remote_file_reader);
+    /// now, buffer is remote_fs_buffer()
 }
 
 size_t RemoteCachedOnDiskReadBufferFromFile::getTotalSizeToRead() const
@@ -95,13 +99,10 @@ void RemoteCachedOnDiskReadBufferFromFile::initialize(size_t offset, size_t size
 
     if (connector)
     {
-        std::string endpoint = "aws-s3";
+        std::string endpoint = "https://shukai-clickhouse.s3.ap-southeast-1.amazonaws.com/";
         std::string source_path = source_file_path;
         connector->queryObject(endpoint, source_path, offset, size);
     }
-    remote_file_reader = implementation_buffer_creator();
-    swap(*remote_file_reader);
-    /// now, buffer is remote_fs_buffer()
     initialized = true;
 }
 
@@ -165,6 +166,7 @@ off_t RemoteCachedOnDiskReadBufferFromFile::getPosition()
     swap(*remote_file_reader);
     auto result = remote_file_reader->getPosition();
     swap(*remote_file_reader);
+    return result;
 }
 
 String RemoteCachedOnDiskReadBufferFromFile::getInfoForLog()

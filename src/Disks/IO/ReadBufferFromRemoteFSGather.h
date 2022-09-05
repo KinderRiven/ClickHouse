@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Connector/Connector.h>
 #include <Common/config.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadSettings.h>
@@ -25,7 +26,8 @@ public:
     ReadBufferFromRemoteFSGather(
         ReadBufferCreator && read_buffer_creator_,
         const StoredObjects & blobs_to_read_,
-        const ReadSettings & settings_);
+        const ReadSettings & settings_,
+        std::shared_ptr<mq_cache::MQCacheConnector> connector_ = nullptr);
 
     ~ReadBufferFromRemoteFSGather() override;
 
@@ -93,6 +95,8 @@ private:
     size_t total_bytes_read_from_current_file = 0;
 
     bool enable_cache_log = false;
+
+    std::shared_ptr<mq_cache::MQCacheConnector> connector;
 };
 
 }
