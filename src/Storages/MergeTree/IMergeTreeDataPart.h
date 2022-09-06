@@ -23,6 +23,8 @@
 
 #include <shared_mutex>
 
+#include <Common/logger_useful.h>
+
 namespace zkutil
 {
     class ZooKeeper;
@@ -574,6 +576,9 @@ private:
 
     /// This ugly flag is needed for debug assertions only
     mutable bool part_is_probably_removed_from_disk = false;
+
+protected:
+    Poco::Logger * log;
 };
 
 using MergeTreeDataPartPtr = std::shared_ptr<const IMergeTreeDataPart>;

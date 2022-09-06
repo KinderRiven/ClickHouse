@@ -72,10 +72,14 @@ RemoteCachedOnDiskReadBufferFromFile::RemoteCachedOnDiskReadBufferFromFile(
     bytes_to_predownload = 0;
     first_offset = 0;
     allow_seeks_after_first_read = true;
-
     remote_file_reader = implementation_buffer_creator();
-    swap(*remote_file_reader);
-    /// now, buffer is remote_fs_buffer()
+    LOG_INFO(
+        log,
+        "Need to read name:{}, size1:{}, size2:{}, allow_seek:{}",
+        remote_file_reader->getFileName(),
+        remote_file_reader->getFileSize(),
+        file_size_,
+        allow_seeks_after_first_read);
 }
 
 size_t RemoteCachedOnDiskReadBufferFromFile::getTotalSizeToRead() const
@@ -114,6 +118,13 @@ bool RemoteCachedOnDiskReadBufferFromFile::nextImpl()
 {
     try
     {
+        LOG_INFO(
+            log,
+            "nextImpl:{}, pos1:{}, pos2:{}, file_size:{}",
+            remote_file_reader->getFileName(),
+            getPosition(),
+            remote_file_reader->getPosition(),
+            remote_file_reader->getFileSize());
         return nextImplStep();
     }
     catch (Exception & e)
@@ -128,35 +139,102 @@ bool RemoteCachedOnDiskReadBufferFromFile::nextImplStep()
     if (!initialized)
         initialize(file_offset_of_buffer_end, getTotalSizeToRead());
 
-    /// buffer is remote_fs_buffer()
+    LOG_INFO(
+        log,
+        "start_nextImpl:{}, position:{}/{}, available:{}/{}",
+        getFileName(),
+        remote_file_reader->getPosition(), /// 0
+        getPosition(), /// 0
+        remote_file_reader->available(), /// 0
+        available()); /// 0
+    
+    /// My buffer is empty, we need to fill it, swap it to remote_file_reader and fill it!
+    /// My buffer is (0, 0)
+    /// remote_file_reader buffer is (0, 0)
     swap(*remote_file_reader);
-
-    /// buffer is nullptr
+    /// My buffer is swap to remote_file_reader, it use next to fill it!
     auto result = remote_file_reader->next();
-
+    /// My buffer has been filled, swap to myself.
     swap(*remote_file_reader);
-    /// buffer is remote_fs_buffer()
+    /// My buffer is (0, 83184), pos is 0
+    /// remote_file_reader buffer is (0, 0), pos is 0
+
+    LOG_INFO(
+        log,
+        "end_nextImpl:{}, position:{}/{}, available:{}/{}",
+        getFileName(),
+        remote_file_reader->getPosition(), /// 83184, because s3 read buffer getPosition() is offset - available()
+        getPosition(), /// 0
+        remote_file_reader->available(), /// 0
+        available()); /// 83184
     return result;
 }
 
 off_t RemoteCachedOnDiskReadBufferFromFile::seek(off_t offset, int whence)
 {
+    LOG_INFO(
+        log,
+        "start_seek:{}, pos1:{}, pos2:{}, offset:{}, file_size:{}, initializate:{}, available1:{}, available2:{}",
+        remote_file_reader->getFileName(),
+        getPosition(),
+        remote_file_reader->getPosition(),
+        offset,
+        remote_file_reader->getFileSize(),
+        initialized,
+        available(),
+        remote_file_reader->available());
+
     swap(*remote_file_reader);
+    LOG_INFO(log, "start_seek:{}, available:{}", remote_file_reader->getFileName(), remote_file_reader->available());
     auto result = remote_file_reader->seek(offset, whence);
+    LOG_INFO(log, "end_seek:{}, available:{}", remote_file_reader->getFileName(), remote_file_reader->available());
     swap(*remote_file_reader);
+    
+    LOG_INFO(
+        log,
+        "end_seek:{}, pos1:{}, pos2:{}, offset:{}, file_size:{}, initializate:{}, available1:{}, available2:{}",
+        remote_file_reader->getFileName(),
+        getPosition(),
+        remote_file_reader->getPosition(),
+        offset,
+        remote_file_reader->getFileSize(),
+        initialized,
+        available(),
+        remote_file_reader->available());
     return result;
 }
 
 void RemoteCachedOnDiskReadBufferFromFile::setReadUntilPosition(size_t position)
 {
+    LOG_INFO(
+        log,
+        "setReadUntilPosition:{}, pos1:{}, pos2:{}, position:{}, file_size:{}, initializate:{}",
+        remote_file_reader->getFileName(),
+        getPosition(),
+        remote_file_reader->getPosition(),
+        position,
+        remote_file_reader->getFileSize(),
+        initialized);
+
     swap(*remote_file_reader);
+    LOG_INFO(log, "setReadUntilPosition:{}, available:{}", remote_file_reader->getFileName(), remote_file_reader->available());
     remote_file_reader->setReadUntilPosition(position);
     swap(*remote_file_reader);
 }
 
 void RemoteCachedOnDiskReadBufferFromFile::setReadUntilEnd()
 {
+    LOG_INFO(
+        log,
+        "setReadUntilEnd:{}, pos1:{}, pos2:{}, file_size:{}, initializate:{}",
+        remote_file_reader->getFileName(),
+        getPosition(),
+        remote_file_reader->getPosition(),
+        remote_file_reader->getFileSize(),
+        initialized);
+
     swap(*remote_file_reader);
+    LOG_INFO(log, "setReadUntilEnd:{}, available:{}", remote_file_reader->getFileName(), remote_file_reader->available());
     remote_file_reader->setReadUntilEnd();
     swap(*remote_file_reader);
 }
