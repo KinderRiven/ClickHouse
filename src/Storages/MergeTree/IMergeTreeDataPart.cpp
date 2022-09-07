@@ -659,8 +659,6 @@ void IMergeTreeDataPart::loadColumnsChecksumsIndexes(bool require_columns_checks
     }
     catch (...)
     {
-        std::string marks_file_path = index_granularity_info.getMarksFilePath(getFileNameForColumn(columns.front()));
-        LOG_INFO(log, "[Error][loadColumnsChecksumsIndexes][marks_file_path:{}]", marks_file_path);
         // There could be conditions that data part to be loaded is broken, but some of meta infos are already written
         // into meta data before exception, need to clean them all.
         metadata_manager->deleteAll(/*include_projection*/ true);

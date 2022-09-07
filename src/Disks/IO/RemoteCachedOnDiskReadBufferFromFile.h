@@ -1,14 +1,14 @@
 #pragma once
 
-#include <Interpreters/Cache/FileCache.h>
-#include <Common/logger_useful.h>
+#include <Connector/Connector.h>
+#include <IO/ReadBufferFromFileBase.h>
+#include <IO/ReadSettings.h>
 #include <IO/SeekableReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
-#include <IO/ReadSettings.h>
-#include <IO/ReadBufferFromFileBase.h>
-#include <Interpreters/FilesystemCacheLog.h>
+#include <Interpreters/Cache/FileCache.h>
 #include <Interpreters/Cache/FileSegment.h>
-#include <Connector/Connector.h>
+#include <Interpreters/FilesystemCacheLog.h>
+#include <Common/logger_useful.h>
 
 
 namespace CurrentMetrics
@@ -46,7 +46,10 @@ public:
 
     off_t getPosition() override;
 
-    size_t getFileOffsetOfBufferEnd() const override { return file_offset_of_buffer_end; }
+    size_t getFileOffsetOfBufferEnd() const override
+    {
+        return remote_file_reader->getFileOffsetOfBufferEnd();
+    }
 
     String getInfoForLog() override;
 
@@ -92,7 +95,7 @@ private:
     String current_buffer_id;
 
     bool allow_seeks_after_first_read;
-    [[maybe_unused]]bool use_external_buffer;
+    [[maybe_unused]] bool use_external_buffer;
     bool is_persistent;
 };
 

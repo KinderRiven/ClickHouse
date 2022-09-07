@@ -113,7 +113,6 @@ void MergeTreeDataPartWide::loadIndexGranularity()
 
     /// We can use any column, it doesn't matter
     std::string marks_file_path = index_granularity_info.getMarksFilePath(getFileNameForColumn(columns.front()));
-    std::string debug_path = data_part_storage->getFullPath() + "/" + marks_file_path;
 
     if (!data_part_storage->exists(marks_file_path))
         throw Exception(
@@ -129,17 +128,12 @@ void MergeTreeDataPartWide::loadIndexGranularity()
     }
     else
     {
-        LOG_INFO(log, "[loadIndexGranularity:{}] size:{}, storage_name:{}", debug_path, marks_file_size, data_part_storage->getDiskName());
         auto buffer = data_part_storage->readFile(marks_file_path, ReadSettings().adjustBufferSize(marks_file_size), marks_file_size, std::nullopt);
         while (!buffer->eof())
         {
-            LOG_INFO(log, "[loadIndexGranularity:{}] buffer->seek({}) begin", debug_path, sizeof(size_t) * 2);
             buffer->seek(sizeof(size_t) * 2, SEEK_CUR); /// skip offset_in_compressed file and offset_in_decompressed_block
-            LOG_INFO(log, "[loadIndexGranularity:{}] buffer->seek({}) ok", debug_path, sizeof(size_t) * 2);
             size_t granularity;
-            LOG_INFO(log, "[loadIndexGranularity:{}] readIntBinary begin", debug_path);
             readIntBinary(granularity, *buffer);
-            LOG_INFO(log, "[loadIndexGranularity:{}] readIntBinary end", debug_path);
             index_granularity.appendMark(granularity);
         }
 
