@@ -74,6 +74,7 @@ RemoteCachedOnDiskReadBufferFromFile::RemoteCachedOnDiskReadBufferFromFile(
     is_persistent = true;
     bytes_to_predownload = 0;
     allow_seeks_after_first_read = false;
+    LOG_INFO(log, "[CREATE] name:{}, offset:{}, size:{}", source_file_path, read_until_position, getFileSize());
 }
 
 size_t RemoteCachedOnDiskReadBufferFromFile::getTotalSizeToRead() const
@@ -151,6 +152,8 @@ bool RemoteCachedOnDiskReadBufferFromFile::nextImplStep()
     if (!initialized)
         initialize(file_offset_of_buffer_end, getTotalSizeToRead());
 
+    assert(!internal_buffer.empty());
+     
     bool result = false;
     if (read_from_cache)
     {
@@ -163,10 +166,11 @@ bool RemoteCachedOnDiskReadBufferFromFile::nextImplStep()
             /// TODO read from cache string
             size_t left_bytes = cache_string.size() - cache_string_pos;
             size_t bytes_to_read = std::min(internal_buffer.size(), left_bytes);
+            assert(!bytes_to_read);
             memcpy(internal_buffer.begin(), cache_string.c_str() + cache_string_pos, bytes_to_read);
-            cache_string_pos += bytes_to_read;
             working_buffer = internal_buffer;
             working_buffer.resize(bytes_to_read); /// set working_buffer.end()
+            cache_string_pos += bytes_to_read;
             file_offset_of_buffer_end += bytes_to_read;
             result = true;
         }
@@ -176,8 +180,9 @@ bool RemoteCachedOnDiskReadBufferFromFile::nextImplStep()
         swap(*implementation_buffer);
         result = implementation_buffer->next();
         swap(*implementation_buffer);
-        if (connector)
-            assertReadCacheIsCorrect(working_buffer.begin(), cache_string.c_str() + has_read_bytes_for_cache, available());
+        /// JUST FOR DEBUG
+        /// if (connector)
+        ///    assertReadCacheIsCorrect(working_buffer.begin(), cache_string.c_str() + has_read_bytes_for_cache, available());
         file_offset_of_buffer_end += available();
     }
     LOG_INFO(
