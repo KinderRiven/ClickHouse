@@ -48,7 +48,8 @@ public:
 
     size_t getFileOffsetOfBufferEnd() const override
     {
-        return remote_file_reader->getFileOffsetOfBufferEnd();
+        LOG_INFO(log, "name:{}, getFileOffsetOfBufferEnd and return {}", getFileName(), file_offset_of_buffer_end);
+        return file_offset_of_buffer_end;
     }
 
     String getInfoForLog() override;
@@ -65,6 +66,8 @@ private:
     size_t getTotalSizeToRead() const;
 
     bool nextImplStep();
+
+    void assertReadCacheIsCorrect(const char * s1, const char * s2, size_t size);
 
     Poco::Logger * log;
     FileCache::Key cache_key;
@@ -97,6 +100,11 @@ private:
     bool allow_seeks_after_first_read;
     [[maybe_unused]] bool use_external_buffer;
     bool is_persistent;
+
+    std::string cache_string;
+    uint64_t cache_string_pos = 0;
+    uint64_t has_read_bytes_for_cache = 0;
+    bool read_from_cache = false;
 };
 
 }

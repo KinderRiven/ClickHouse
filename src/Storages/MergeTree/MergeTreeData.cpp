@@ -316,12 +316,16 @@ MergeTreeData::MergeTreeData(
     }
     else
     {
+
         auto buf = version_file.second->readFile(version_file.first);
         UInt32 read_format_version;
         readIntText(read_format_version, *buf);
         format_version = read_format_version;
+
         if (!buf->eof())
+        {
             throw Exception("Bad version file: " + fullPath(version_file.second, version_file.first), ErrorCodes::CORRUPTED_DATA);
+        }
     }
 
     if (format_version < min_format_version)

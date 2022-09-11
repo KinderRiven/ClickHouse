@@ -13,7 +13,6 @@
 #include <Storages/StorageS3Settings.h>
 #include <Common/MultiVersion.h>
 #include <Connector/Connector.h>
-
 namespace DB
 {
 

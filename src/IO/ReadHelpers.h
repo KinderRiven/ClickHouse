@@ -22,6 +22,8 @@
 #include <Core/DecimalFunctions.h>
 #include <Core/UUID.h>
 
+#include <IO/ReadBufferFromFileBase.h>
+
 #include <Common/Allocator.h>
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -39,6 +41,7 @@
 #include <DataTypes/DataTypeDateTime.h>
 
 #include <double-conversion/double-conversion.h>
+#include <Common/logger_useful.h>
 
 static constexpr auto DEFAULT_MAX_STRING_SIZE = 1_GiB;
 
