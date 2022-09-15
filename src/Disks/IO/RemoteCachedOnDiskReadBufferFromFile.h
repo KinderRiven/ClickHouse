@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <Connector/Connector.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <IO/ReadSettings.h>
@@ -25,6 +26,40 @@ public:
     using ImplementationBufferPtr = std::shared_ptr<ReadBufferFromFileBase>;
     using ImplementationBufferCreator = std::function<ImplementationBufferPtr()>;
 
+    struct ReadSourceFromFile
+    {
+        int fd;
+        uint64_t offset;
+        uint64_t has_read = 0;
+        mq_cache::QueryObjectSegment segment;
+
+        ReadSourceFromFile(mq_cache::QueryObjectSegment & segment_) : offset(segment_.offset), segment(segment_)
+        {
+            fd = ::open(segment.cache_path.c_str(), O_RDONLY);
+            assert(fd > 0);
+            lseek(fd, offset, SEEK_SET);
+        }
+
+        ~ReadSourceFromFile()
+        {
+            close(fd);
+        }
+
+        /// All data has been read, return true;
+        bool isEnd() { return has_read == segment.size; }
+
+        uint64_t read(char * to, size_t size)
+        {
+            auto can_read_byes = std::min(size, segment.size - has_read);
+            auto read_bytes = ::read(fd, to, can_read_byes);
+            has_read += read_bytes;
+            offset += read_bytes;
+            return read_bytes;
+        }
+    };
+
+    using ReadSourceFromFilePtr = std::shared_ptr<ReadSourceFromFile>;
+
     RemoteCachedOnDiskReadBufferFromFile(
         const String & source_file_path_,
         const FileCache::Key & cache_key_,
@@ -48,7 +83,6 @@ public:
 
     size_t getFileOffsetOfBufferEnd() const override
     {
-        LOG_INFO(log, "name:{}, getFileOffsetOfBufferEnd and return {}", getFileName(), file_offset_of_buffer_end);
         return file_offset_of_buffer_end;
     }
 
@@ -74,7 +108,11 @@ private:
     String source_file_path;
 
     FileCachePtr cache;
+
     std::shared_ptr<mq_cache::MQCacheConnector> connector;
+    mq_cache::QueryObjectSegments segments;
+    ReadSourceFromFilePtr read_source_from_cache;
+
     ReadSettings settings;
 
     size_t read_until_position;
@@ -100,11 +138,8 @@ private:
     bool allow_seeks_after_first_read;
     [[maybe_unused]] bool use_external_buffer;
     bool is_persistent;
-
-    std::string cache_string;
-    uint64_t cache_string_pos = 0;
-    uint64_t has_read_bytes_for_cache = 0;
     bool read_from_cache = false;
+    uint64_t working_segment_pos = 0;
 };
 
 }
