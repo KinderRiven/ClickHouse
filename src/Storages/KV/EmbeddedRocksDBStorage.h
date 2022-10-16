@@ -11,6 +11,7 @@ namespace DB
 
 class EmbeddedRocksDBStorage : public IEmbeddedKeyValueStorage
 {
+public:
     using RocksDBPtr = std::shared_ptr<rocksdb::DB>;
 
 public:
@@ -37,7 +38,6 @@ public:
         WriteIterator(RocksDBPtr rocksdb_ptr_) : rocksdb_ptr(rocksdb_ptr_) { }
 
         bool put(String & key, String & value) override;
-
         bool commit() override;
 
     private:
@@ -49,9 +49,8 @@ public:
 
     void initDB(EmbeddedKeyValueStorageOptions & options) override;
 
-    std::unique_ptr<IEmbeddedKeyValueStorage::ReadIterator> getReader() const override;
-
-    std::unique_ptr<IEmbeddedKeyValueStorage::WriteIterator> getWriter() override;
+    IEmbeddedKeyValueStorage::Reader getReader() const override;
+    IEmbeddedKeyValueStorage::Writer getWriter() override;
 
 private:
     RocksDBPtr rocksdb_ptr;
