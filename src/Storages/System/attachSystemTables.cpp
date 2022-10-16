@@ -82,7 +82,7 @@
 #endif
 
 #if USE_ROCKSDB
-#include <Storages/RocksDB/StorageSystemRocksDB.h>
+#include <Storages/KV/StorageSystemRocksDB.h>
 #include <Storages/System/StorageSystemMergeTreeMetadataCache.h>
 #endif
 

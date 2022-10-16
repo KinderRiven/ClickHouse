@@ -2,9 +2,9 @@
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Storages/RocksDB/StorageSystemRocksDB.h>
+#include <Storages/KV/StorageSystemRocksDB.h>
 #include <Storages/SelectQueryInfo.h>
-#include <Storages/RocksDB/StorageEmbeddedRocksDB.h>
+#include <Storages/KV/StorageEmbeddedKeyValue.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Access/ContextAccess.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -43,7 +43,7 @@ void StorageSystemRocksDB::fillData(MutableColumns & res_columns, ContextPtr con
     const auto access = context->getAccess();
     const bool check_access_for_databases = !access->isGranted(AccessType::SHOW_TABLES);
 
-    using RocksDBStoragePtr = std::shared_ptr<StorageEmbeddedRocksDB>;
+    using RocksDBStoragePtr = std::shared_ptr<StorageEmbeddedKeyValue>;
     std::map<String, std::map<String, RocksDBStoragePtr>> tables;
     for (const auto & db : DatabaseCatalog::instance().getDatabases())
     {
@@ -52,7 +52,7 @@ void StorageSystemRocksDB::fillData(MutableColumns & res_columns, ContextPtr con
         for (auto iterator = db.second->getTablesIterator(context); iterator->isValid(); iterator->next())
         {
             StoragePtr table = iterator->table();
-            RocksDBStoragePtr rocksdb_table = table ? std::dynamic_pointer_cast<StorageEmbeddedRocksDB>(table) : nullptr;
+            RocksDBStoragePtr rocksdb_table = table ? std::dynamic_pointer_cast<StorageEmbeddedKeyValue>(table) : nullptr;
             if (!rocksdb_table)
                 continue;
 

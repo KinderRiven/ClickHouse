@@ -1,6 +1,6 @@
 #include <Storages/checkAndGetLiteralArgument.h>
-#include <Storages/RocksDB/StorageEmbeddedRocksDB.h>
-#include <Storages/RocksDB/EmbeddedRocksDBSink.h>
+#include <Storages/KV/StorageEmbeddedKeyValue.h>
+#include <Storages/KV/EmbeddedKeyValueSink.h>
 #include <Storages/MutationCommands.h>
 
 #include <DataTypes/DataTypesNumber.h>
@@ -73,7 +73,7 @@ class EmbeddedRocksDBSource : public ISource
 {
 public:
     EmbeddedRocksDBSource(
-        const StorageEmbeddedRocksDB & storage_,
+        const StorageEmbeddedKeyValue & storage_,
         const Block & header,
         FieldVectorPtr keys_,
         FieldVector::const_iterator begin_,
@@ -91,7 +91,7 @@ public:
     }
 
     EmbeddedRocksDBSource(
-        const StorageEmbeddedRocksDB & storage_,
+        const StorageEmbeddedKeyValue & storage_,
         const Block & header,
         std::unique_ptr<rocksdb::Iterator> iterator_,
         const size_t max_block_size_)
@@ -149,7 +149,7 @@ public:
     }
 
 private:
-    const StorageEmbeddedRocksDB & storage;
+    const StorageEmbeddedKeyValue & storage;
 
     size_t primary_key_pos;
 
@@ -166,7 +166,7 @@ private:
 };
 
 
-StorageEmbeddedRocksDB::StorageEmbeddedRocksDB(const StorageID & table_id_,
+StorageEmbeddedKeyValue::StorageEmbeddedKeyValue(const StorageID & table_id_,
         const String & relative_data_path_,
         const StorageInMemoryMetadata & metadata_,
         bool attach,
@@ -194,7 +194,7 @@ StorageEmbeddedRocksDB::StorageEmbeddedRocksDB(const StorageID & table_id_,
     initDB();
 }
 
-void StorageEmbeddedRocksDB::truncate(const ASTPtr &, const StorageMetadataPtr & , ContextPtr, TableExclusiveLockHolder &)
+void StorageEmbeddedKeyValue::truncate(const ASTPtr &, const StorageMetadataPtr & , ContextPtr, TableExclusiveLockHolder &)
 {
     std::lock_guard lock(rocksdb_ptr_mx);
     rocksdb_ptr->Close();
@@ -205,7 +205,7 @@ void StorageEmbeddedRocksDB::truncate(const ASTPtr &, const StorageMetadataPtr &
     initDB();
 }
 
-void StorageEmbeddedRocksDB::checkMutationIsPossible(const MutationCommands & commands, const Settings & /* settings */) const
+void StorageEmbeddedKeyValue::checkMutationIsPossible(const MutationCommands & commands, const Settings & /* settings */) const
 {
     if (commands.empty())
         return;
@@ -218,7 +218,7 @@ void StorageEmbeddedRocksDB::checkMutationIsPossible(const MutationCommands & co
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Only DELETE and UPDATE mutation supported for EmbeddedRocksDB");
 }
 
-void StorageEmbeddedRocksDB::mutate(const MutationCommands & commands, ContextPtr context_)
+void StorageEmbeddedKeyValue::mutate(const MutationCommands & commands, ContextPtr context_)
 {
     if (commands.empty())
         return;
@@ -242,7 +242,7 @@ void StorageEmbeddedRocksDB::mutate(const MutationCommands & commands, ContextPt
         auto pipeline = QueryPipelineBuilder::getPipeline(interpreter->execute());
         PullingPipelineExecutor executor(pipeline);
 
-        auto sink = std::make_shared<EmbeddedRocksDBSink>(*this, metadata_snapshot);
+        auto sink = std::make_shared<EmbeddedKeyValueSink>(*this, metadata_snapshot);
 
         Block block;
         while (executor.pull(block))
@@ -282,7 +282,7 @@ void StorageEmbeddedRocksDB::mutate(const MutationCommands & commands, ContextPt
     auto pipeline = QueryPipelineBuilder::getPipeline(interpreter->execute());
     PullingPipelineExecutor executor(pipeline);
 
-    auto sink = std::make_shared<EmbeddedRocksDBSink>(*this, metadata_snapshot);
+    auto sink = std::make_shared<EmbeddedKeyValueSink>(*this, metadata_snapshot);
 
     Block block;
     while (executor.pull(block))
@@ -291,7 +291,7 @@ void StorageEmbeddedRocksDB::mutate(const MutationCommands & commands, ContextPt
     }
 }
 
-void StorageEmbeddedRocksDB::initDB()
+void StorageEmbeddedKeyValue::initDB()
 {
     rocksdb::Status status;
     rocksdb::Options base;
@@ -396,7 +396,7 @@ void StorageEmbeddedRocksDB::initDB()
     }
 }
 
-Pipe StorageEmbeddedRocksDB::read(
+Pipe StorageEmbeddedKeyValue::read(
         const Names & column_names,
         const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
@@ -447,10 +447,10 @@ Pipe StorageEmbeddedRocksDB::read(
     }
 }
 
-SinkToStoragePtr StorageEmbeddedRocksDB::write(
+SinkToStoragePtr StorageEmbeddedKeyValue::write(
     const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr /*context*/)
 {
-    return std::make_shared<EmbeddedRocksDBSink>(*this, metadata_snapshot);
+    return std::make_shared<EmbeddedKeyValueSink>(*this, metadata_snapshot);
 }
 
 static StoragePtr create(const StorageFactory::Arguments & args)
@@ -478,18 +478,18 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     metadata.setConstraints(args.constraints);
 
     if (!args.storage_def->primary_key)
-        throw Exception("StorageEmbeddedRocksDB must require one column in primary key", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("StorageEmbeddedKeyValue must require one column in primary key", ErrorCodes::BAD_ARGUMENTS);
 
     metadata.primary_key = KeyDescription::getKeyFromAST(args.storage_def->primary_key->ptr(), metadata.columns, args.getContext());
     auto primary_key_names = metadata.getColumnsRequiredForPrimaryKey();
     if (primary_key_names.size() != 1)
     {
-        throw Exception("StorageEmbeddedRocksDB must require one column in primary key", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("StorageEmbeddedKeyValue must require one column in primary key", ErrorCodes::BAD_ARGUMENTS);
     }
-    return std::make_shared<StorageEmbeddedRocksDB>(args.table_id, args.relative_data_path, metadata, args.attach, args.getContext(), primary_key_names[0], ttl, std::move(rocksdb_dir), read_only);
+    return std::make_shared<StorageEmbeddedKeyValue>(args.table_id, args.relative_data_path, metadata, args.attach, args.getContext(), primary_key_names[0], ttl, std::move(rocksdb_dir), read_only);
 }
 
-std::shared_ptr<rocksdb::Statistics> StorageEmbeddedRocksDB::getRocksDBStatistics() const
+std::shared_ptr<rocksdb::Statistics> StorageEmbeddedKeyValue::getRocksDBStatistics() const
 {
     std::shared_lock<std::shared_mutex> lock(rocksdb_ptr_mx);
     if (!rocksdb_ptr)
@@ -497,7 +497,7 @@ std::shared_ptr<rocksdb::Statistics> StorageEmbeddedRocksDB::getRocksDBStatistic
     return rocksdb_ptr->GetOptions().statistics;
 }
 
-std::vector<rocksdb::Status> StorageEmbeddedRocksDB::multiGet(const std::vector<rocksdb::Slice> & slices_keys, std::vector<String> & values) const
+std::vector<rocksdb::Status> StorageEmbeddedKeyValue::multiGet(const std::vector<rocksdb::Slice> & slices_keys, std::vector<String> & values) const
 {
     std::shared_lock<std::shared_mutex> lock(rocksdb_ptr_mx);
     if (!rocksdb_ptr)
@@ -505,13 +505,13 @@ std::vector<rocksdb::Status> StorageEmbeddedRocksDB::multiGet(const std::vector<
     return rocksdb_ptr->MultiGet(rocksdb::ReadOptions(), slices_keys, &values);
 }
 
-Chunk StorageEmbeddedRocksDB::getByKeys(
+Chunk StorageEmbeddedKeyValue::getByKeys(
     const ColumnsWithTypeAndName & keys,
     PaddedPODArray<UInt8> & null_map,
     const Names &) const
 {
     if (keys.size() != 1)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "StorageEmbeddedRocksDB supports only one key, got: {}", keys.size());
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "StorageEmbeddedKeyValue supports only one key, got: {}", keys.size());
 
     auto raw_keys = serializeKeysToRawString(keys[0]);
 
@@ -521,12 +521,12 @@ Chunk StorageEmbeddedRocksDB::getByKeys(
     return getBySerializedKeys(raw_keys, &null_map);
 }
 
-Block StorageEmbeddedRocksDB::getSampleBlock(const Names &) const
+Block StorageEmbeddedKeyValue::getSampleBlock(const Names &) const
 {
     return getInMemoryMetadataPtr()->getSampleBlock();
 }
 
-Chunk StorageEmbeddedRocksDB::getBySerializedKeys(
+Chunk StorageEmbeddedKeyValue::getBySerializedKeys(
     const std::vector<std::string> & keys,
     PaddedPODArray<UInt8> * null_map) const
 {
@@ -577,7 +577,7 @@ Chunk StorageEmbeddedRocksDB::getBySerializedKeys(
     return Chunk(std::move(columns), num_rows);
 }
 
-void registerStorageEmbeddedRocksDB(StorageFactory & factory)
+void registerStorageEmbeddedKeyValue(StorageFactory & factory)
 {
     StorageFactory::StorageFeatures features{
         .supports_sort_order = true,

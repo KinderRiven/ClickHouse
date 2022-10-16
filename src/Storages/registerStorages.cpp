@@ -69,7 +69,7 @@ void registerStorageNATS(StorageFactory & factory);
 #endif
 
 #if USE_ROCKSDB
-void registerStorageEmbeddedRocksDB(StorageFactory & factory);
+void registerStorageEmbeddedKeyValue(StorageFactory & factory);
 #endif
 
 #if USE_LIBPQXX
@@ -161,7 +161,7 @@ void registerStorages()
     #endif
 
     #if USE_ROCKSDB
-    registerStorageEmbeddedRocksDB(factory);
+    registerStorageEmbeddedKeyValue(factory);
     #endif
 
     #if USE_LIBPQXX

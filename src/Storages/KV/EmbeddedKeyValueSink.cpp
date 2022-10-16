@@ -1,5 +1,5 @@
-#include <Storages/RocksDB/EmbeddedRocksDBSink.h>
-#include <Storages/RocksDB/StorageEmbeddedRocksDB.h>
+#include <Storages/KV/EmbeddedKeyValueSink.h>
+#include <Storages/KV/StorageEmbeddedKeyValue.h>
 #include <IO/WriteBufferFromString.h>
 
 #include <rocksdb/utilities/db_ttl.h>
@@ -13,8 +13,8 @@ namespace ErrorCodes
     extern const int ROCKSDB_ERROR;
 }
 
-EmbeddedRocksDBSink::EmbeddedRocksDBSink(
-    StorageEmbeddedRocksDB & storage_,
+EmbeddedKeyValueSink::EmbeddedKeyValueSink(
+    StorageEmbeddedKeyValue & storage_,
     const StorageMetadataPtr & metadata_snapshot_)
     : SinkToStorage(metadata_snapshot_->getSampleBlock())
     , storage(storage_)
@@ -28,7 +28,7 @@ EmbeddedRocksDBSink::EmbeddedRocksDBSink(
     }
 }
 
-void EmbeddedRocksDBSink::consume(Chunk chunk)
+void EmbeddedKeyValueSink::consume(Chunk chunk)
 {
     auto rows = chunk.getNumRows();
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());

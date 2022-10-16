@@ -118,7 +118,7 @@ if (USE_LIBPQXX)
 endif()
 
 if (TARGET ch_contrib::rocksdb)
-    add_headers_and_sources(dbms Storages/RocksDB)
+    add_headers_and_sources(dbms Storages/KV)
 endif()
 
 if (TARGET ch_contrib::aws_s3)
