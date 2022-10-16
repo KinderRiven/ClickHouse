@@ -588,5 +588,4 @@ void registerStorageEmbeddedKeyValue(StorageFactory & factory)
     factory.registerStorage("EmbeddedRocksDB", create, features);
 }
 
-
 }

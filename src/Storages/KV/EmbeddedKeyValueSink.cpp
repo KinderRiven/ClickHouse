@@ -1,9 +1,7 @@
 #include <Storages/KV/EmbeddedKeyValueSink.h>
 #include <Storages/KV/StorageEmbeddedKeyValue.h>
 #include <IO/WriteBufferFromString.h>
-
 #include <rocksdb/utilities/db_ttl.h>
-
 
 namespace DB
 {
