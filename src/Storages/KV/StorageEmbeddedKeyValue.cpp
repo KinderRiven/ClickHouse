@@ -190,13 +190,6 @@ StorageEmbeddedKeyValue::StorageEmbeddedKeyValue(const StorageID & table_id_,
 
 void StorageEmbeddedKeyValue::truncate(const ASTPtr &, const StorageMetadataPtr & , ContextPtr, TableExclusiveLockHolder &)
 {
-    std::lock_guard lock(rocksdb_ptr_mx);
-    rocksdb_ptr->Close();
-    rocksdb_ptr = nullptr;
-
-    fs::remove_all(rocksdb_dir);
-    fs::create_directories(rocksdb_dir);
-
     EmbeddedKeyValueStorageOptions options
     {
         .table_name = getStorageID().getTableName(),
@@ -205,7 +198,7 @@ void StorageEmbeddedKeyValue::truncate(const ASTPtr &, const StorageMetadataPtr 
         .ttl = ttl,
         .read_only = read_only,
     };
-    kv_store->initDB(options);
+    kv_store->truncate(options);
 }
 
 void StorageEmbeddedKeyValue::checkMutationIsPossible(const MutationCommands & commands, const Settings & /* settings */) const
@@ -256,23 +249,21 @@ void StorageEmbeddedKeyValue::mutate(const MutationCommands & commands, ContextP
             auto column = column_it->column;
             auto size = column->size();
 
-            rocksdb::WriteBatch batch;
+            auto write_iterator = kv_store->getWriter();
             WriteBufferFromOwnString wb_key;
             for (size_t i = 0; i < size; ++i)
             {
                 wb_key.restart();
-
                 column_it->type->getDefaultSerialization()->serializeBinary(*column, i, wb_key);
-                auto status = batch.Delete(wb_key.str());
+                auto status = write_iterator->remove(wb_key.str());
                 if (!status.ok())
-                    throw Exception("RocksDB write error: " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
+                    throw Exception("RocksDB write error: " + status.toString(), ErrorCodes::ROCKSDB_ERROR);
             }
 
-            auto status = rocksdb_ptr->Write(rocksdb::WriteOptions(), &batch);
+            auto status = write_iterator->commit();
             if (!status.ok())
-                throw Exception("RocksDB write error: " + status.ToString(), ErrorCodes::ROCKSDB_ERROR);
+                throw Exception("RocksDB write error: " + status.toString(), ErrorCodes::ROCKSDB_ERROR);
         }
-
         return;
     }
 
@@ -482,7 +473,6 @@ void registerStorageEmbeddedKeyValue(StorageFactory & factory)
         .supports_ttl = true,
         .supports_parallel_insert = true,
     };
-
     factory.registerStorage("EmbeddedRocksDB", create, features);
 }
 

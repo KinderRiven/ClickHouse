@@ -37,8 +37,9 @@ public:
     public:
         WriteIterator(RocksDBPtr rocksdb_ptr_) : rocksdb_ptr(rocksdb_ptr_) { }
 
-        bool put(String & key, String & value) override;
-        bool commit() override;
+        Status put(String & key, String & value) override;
+        Status remove(String & key) override;
+        Status commit() override;
 
     private:
         rocksdb::WriteBatch batch;
@@ -48,11 +49,13 @@ public:
     EmbeddedRocksDBStorage();
 
     void initDB(EmbeddedKeyValueStorageOptions & options) override;
+    void truncate(EmbeddedKeyValueStorageOptions & options) override;
 
     IEmbeddedKeyValueStorage::Reader getReader() const override;
     IEmbeddedKeyValueStorage::Writer getWriter() override;
 
 private:
+    mutable std::shared_mutex rocksdb_ptr_mx;
     RocksDBPtr rocksdb_ptr;
 };
 

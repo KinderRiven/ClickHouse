@@ -30,6 +30,48 @@ static RocksDBOptions getOptionsFromConfig(const Poco::Util::AbstractConfigurati
     return options;
 }
 
+static IEmbeddedKeyValueStorage::Status::Code convertStatusCode(rocksdb::Status & status)
+{
+    switch (status.code())
+    {
+        case rocksdb::Status::Code::kOk:
+            return IEmbeddedKeyValueStorage::Status::Code::kOk;
+        case rocksdb::Status::Code::kNotFound:
+            return IEmbeddedKeyValueStorage::Status::Code::kNotFound;
+        case rocksdb::Status::Code::kCorruption:
+            return IEmbeddedKeyValueStorage::Status::Code::kCorruption;
+        case rocksdb::Status::Code::kNotSupported:
+            return IEmbeddedKeyValueStorage::Status::Code::kNotSupported;
+        case rocksdb::Status::Code::kInvalidArgument:
+            return IEmbeddedKeyValueStorage::Status::Code::kInvalidArgument;
+        case rocksdb::Status::Code::kIOError:
+            return IEmbeddedKeyValueStorage::Status::Code::kIOError;
+        case rocksdb::Status::Code::kMergeInProgress:
+            return IEmbeddedKeyValueStorage::Status::Code::kMergeInProgress;
+        case rocksdb::Status::Code::kIncomplete:
+            return IEmbeddedKeyValueStorage::Status::Code::kIncomplete;
+        case rocksdb::Status::Code::kShutdownInProgress:
+            return IEmbeddedKeyValueStorage::Status::Code::kShutdownInProgress;
+        case rocksdb::Status::Code::kTimedOut:
+            return IEmbeddedKeyValueStorage::Status::Code::kTimedOut;
+        case rocksdb::Status::Code::kAborted:
+            return IEmbeddedKeyValueStorage::Status::Code::kAborted;
+        case rocksdb::Status::Code::kBusy:
+            return IEmbeddedKeyValueStorage::Status::Code::kBusy;
+        case rocksdb::Status::Code::kExpired:
+            return IEmbeddedKeyValueStorage::Status::Code::kExpired;
+        case rocksdb::Status::Code::kTryAgain:
+            return IEmbeddedKeyValueStorage::Status::Code::kTryAgain;
+        case rocksdb::Status::Code::kCompactionTooLarge:
+            return IEmbeddedKeyValueStorage::Status::Code::kCompactionTooLarge;
+        case rocksdb::Status::Code::kColumnFamilyDropped:
+            return IEmbeddedKeyValueStorage::Status::Code::kColumnFamilyDropped;
+        case rocksdb::Status::Code::kMaxCode:
+            return IEmbeddedKeyValueStorage::Status::Code::kMaxCode;
+    }
+    UNREACHABLE();
+}
+
 String EmbeddedRocksDBStorage::ReadIterator::key()
 {
     return iterator->key().ToString();
@@ -55,20 +97,37 @@ bool EmbeddedRocksDBStorage::ReadIterator::valid()
     return iterator->Valid();
 }
 
-bool EmbeddedRocksDBStorage::WriteIterator::put(String & key, String & value)
+IEmbeddedKeyValueStorage::Status EmbeddedRocksDBStorage::WriteIterator::put(String & key, String & value)
 {
-    rocksdb::Status status = batch.Put(key, value);
-    return status.ok();
+    auto status = batch.Put(key, value);
+    return IEmbeddedKeyValueStorage::Status(convertStatusCode(status));
 }
 
-bool EmbeddedRocksDBStorage::WriteIterator::commit()
+IEmbeddedKeyValueStorage::Status EmbeddedRocksDBStorage::WriteIterator::remove(String & key)
 {
-    rocksdb_ptr->Write(rocksdb::WriteOptions(), &batch);
-    return true;
+    auto status = batch.Delete(key);
+    return IEmbeddedKeyValueStorage::Status(convertStatusCode(status));
+}
+
+IEmbeddedKeyValueStorage::Status EmbeddedRocksDBStorage::WriteIterator::commit()
+{
+    auto status = rocksdb_ptr->Write(rocksdb::WriteOptions(), &batch);
+    return IEmbeddedKeyValueStorage::Status(convertStatusCode(status));
 }
 
 EmbeddedRocksDBStorage::EmbeddedRocksDBStorage()
 {
+}
+
+void EmbeddedRocksDBStorage::truncate(EmbeddedKeyValueStorageOptions & options)
+{
+    std::lock_guard lock(rocksdb_ptr_mx);
+    rocksdb_ptr->Close();
+    rocksdb_ptr = nullptr;
+
+    fs::remove_all(options.rocksdb_dir);
+    fs::create_directories(options.rocksdb_dir);
+    initDB(options);
 }
 
 void EmbeddedRocksDBStorage::initDB(EmbeddedKeyValueStorageOptions & options)
