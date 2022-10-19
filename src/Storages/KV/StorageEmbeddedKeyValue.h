@@ -5,6 +5,7 @@
 #include <Storages/IStorage.h>
 #include <Interpreters/IKeyValueEntity.h>
 #include <rocksdb/status.h>
+#include <Storages/KV/IEmbeddedKeyValueStorage.h>
 
 
 namespace rocksdb
@@ -28,6 +29,7 @@ class StorageEmbeddedKeyValue final : public IStorage, public IKeyValueEntity, W
     friend class EmbeddedKeyValueSink;
 public:
     StorageEmbeddedKeyValue(const StorageID & table_id_,
+        EmbeddedKeyValueStoragePtr kv_store_,
         const String & relative_data_path_,
         const StorageInMemoryMetadata & metadata,
         bool attach,
@@ -81,6 +83,7 @@ public:
         PaddedPODArray<UInt8> * out_null_map) const;
 
 private:
+    EmbeddedKeyValueStoragePtr kv_store;
     const String primary_key;
     using RocksDBPtr = std::unique_ptr<rocksdb::DB>;
     RocksDBPtr rocksdb_ptr;
@@ -88,7 +91,5 @@ private:
     String rocksdb_dir;
     Int32 ttl;
     bool read_only;
-
-    void initDB();
 };
 }

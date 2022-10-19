@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <Storages/IStorage.h>
 #include <Interpreters/Context.h>
@@ -12,9 +13,9 @@ class Context;
 
 struct EmbeddedKeyValueStorageOptions
 {
-    StorageID storage_id;
+    String table_name;
     String rocksdb_dir;
-    ContextPtr context;
+    const Poco::Util::AbstractConfiguration & config;
     Int32 ttl;
     bool read_only;
 };
@@ -55,5 +56,7 @@ public:
     virtual Reader getReader() const = 0;
     virtual Writer getWriter() = 0;
 };
+
+using EmbeddedKeyValueStoragePtr = std::shared_ptr<IEmbeddedKeyValueStorage>;
 
 };

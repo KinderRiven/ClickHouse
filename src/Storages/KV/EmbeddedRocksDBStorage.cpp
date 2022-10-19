@@ -84,7 +84,7 @@ void EmbeddedRocksDBStorage::initDB(EmbeddedKeyValueStorageOptions & options)
 
     rocksdb::Options merged = base;
 
-    const auto & config = options.context->getConfigRef();
+    const auto & config = options.config;
     if (config.has("rocksdb.options"))
     {
         auto config_options = getOptionsFromConfig(config, "rocksdb.options");
@@ -114,7 +114,7 @@ void EmbeddedRocksDBStorage::initDB(EmbeddedKeyValueStorageOptions & options)
 
     if (config.has("rocksdb.tables"))
     {
-        auto table_name = options.storage_id.getTableName();
+        auto table_name = options.table_name;
 
         Poco::Util::AbstractConfiguration::Keys keys;
         config.keys("rocksdb.tables", keys);
