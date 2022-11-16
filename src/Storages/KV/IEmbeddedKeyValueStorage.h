@@ -67,7 +67,6 @@ public:
 
         virtual String key();
         virtual String value();
-
         virtual void seekToFirst();
 
         virtual void next();
@@ -81,7 +80,6 @@ public:
 
         virtual Status put(String & key, String & value);
         virtual Status remove(String & key);
-
         virtual Status commit();
     };
 

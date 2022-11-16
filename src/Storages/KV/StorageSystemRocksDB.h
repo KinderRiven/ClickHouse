@@ -8,7 +8,6 @@ namespace DB
 
 class Context;
 
-
 /** Implements the `rocksdb` system table, which expose various rocksdb metrics.
   */
 class StorageSystemRocksDB final : public IStorageSystemOneBlock<StorageSystemRocksDB>
